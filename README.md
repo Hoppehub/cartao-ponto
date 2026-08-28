@@ -56,6 +56,21 @@ testes/gerar_exemplos.js gera os arquivos de exemplo
 testes/test_afd_parser.js testes do analisador
 ```
 
+## Como abrir para testar
+
+Três caminhos, do mais rápido ao definitivo:
+
+1. **Direto do disco.** Baixe a branch e abra `leitor_afd.html` com dois cliques. Funciona em `file://`,
+   sem servidor — os botões de exemplo montam um AFD fictício na hora.
+   ```bash
+   git clone -b claude/afd-reader-z3q16c https://github.com/GITHUPPE/ftm.git
+   ```
+2. **Servidor local**, se preferir testar como fica publicado:
+   ```bash
+   npx http-server .    # depois abra http://127.0.0.1:8080/leitor_afd.html
+   ```
+3. **No ar, junto do Ahtools**, seguindo a integração descrita abaixo.
+
 ## Como usar
 
 Abra `leitor_afd.html` no navegador e arraste o AFD, ou clique para selecionar.

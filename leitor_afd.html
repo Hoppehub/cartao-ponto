@@ -31,7 +31,31 @@
     --grade: #e5e7eb;
 }
 
-[data-theme="dark"] {
+/* Tokens escuros em tres estados: escolha explicita do visitante,
+   preferencia do sistema e, no meio, o padrao "seguir o sistema". */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg-color: #0f172a;
+        --text-color: #f1f5f9;
+        --card-bg: #1e293b;
+        --border-color: #334155;
+        --text-muted: #94a3b8;
+        --linha-zebra: #172033;
+        --realce: #1e3a5f;
+        --erro: #fca5a5;
+        --erro-fundo: #451a1a;
+        --alerta: #fcd34d;
+        --alerta-fundo: #422006;
+        --info: #93c5fd;
+        --info-fundo: #172554;
+        --ok: #86efac;
+        --ok-fundo: #052e16;
+        --barra: #4c93f8;
+        --grade: #334155;
+    }
+}
+
+:root[data-theme="dark"] {
     --bg-color: #0f172a;
     --text-color: #f1f5f9;
     --card-bg: #1e293b;

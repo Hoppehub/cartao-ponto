@@ -69,21 +69,42 @@
      * Tema
      * ------------------------------------------------------------------ */
 
+    /* Sem escolha explicita, quem manda e a pagina que hospeda ou o sistema:
+       o atributo so e carimbado quando o visitante troca o tema. */
+    function temaEfetivo() {
+        var atual = document.documentElement.getAttribute('data-theme');
+        if (atual === 'dark' || atual === 'light') { return atual; }
+        return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    }
+
+    function atualizarIconeTema() {
+        var i = $('btnTema').querySelector('i');
+        i.className = temaEfetivo() === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
     function aplicarTema(tema) {
         document.documentElement.setAttribute('data-theme', tema);
-        var i = $('btnTema').querySelector('i');
-        i.className = tema === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         try { localStorage.setItem('leitor-afd-tema', tema); } catch (e) { /* modo privado */ }
+        atualizarIconeTema();
     }
 
     function iniciarTema() {
         var salvo = null;
         try { salvo = localStorage.getItem('leitor-afd-tema'); } catch (e) { /* ignora */ }
-        var escuro = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        aplicarTema(salvo || (escuro ? 'dark' : 'light'));
+        if (salvo === 'dark' || salvo === 'light') {
+            document.documentElement.setAttribute('data-theme', salvo);
+        }
+        atualizarIconeTema();
         $('btnTema').addEventListener('click', function () {
-            aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+            aplicarTema(temaEfetivo() === 'dark' ? 'light' : 'dark');
         });
+        if (window.matchMedia) {
+            var mq = window.matchMedia('(prefers-color-scheme: dark)');
+            var aoTrocarSistema = function () {
+                if (!document.documentElement.hasAttribute('data-theme')) { atualizarIconeTema(); }
+            };
+            if (mq.addEventListener) { mq.addEventListener('change', aoTrocarSistema); }
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -969,33 +990,57 @@
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     }
 
+    /* Ultimo recurso: o navegador pode barrar a area de transferencia
+       (iframe sem permissao, contexto nao seguro). Ai o texto vai para a
+       tela, pronto para selecionar. */
+    function mostrarTextoParaCopiar(texto) {
+        $('modalTitulo').textContent = 'Copiar dados da tabela';
+        $('modalCorpo').innerHTML =
+            '<p class="legenda-grafico" style="margin-top:0">O navegador bloqueou a cópia automática. ' +
+            'O conteúdo está selecionado abaixo: use Ctrl+C (ou Cmd+C) e cole na planilha.</p>' +
+            '<textarea id="areaCopia" readonly spellcheck="false" style="width:100%;min-height:300px;' +
+            'font-family:\'SFMono-Regular\',Consolas,monospace;font-size:0.75rem;padding:10px;' +
+            'border-radius:8px;border:1px solid var(--border-color);background:var(--bg-color);' +
+            'color:var(--text-color);"></textarea>';
+        $('areaCopia').value = texto;
+        $('modalFundo').classList.add('aberto');
+        $('areaCopia').focus();
+        $('areaCopia').select();
+    }
+
     function copiarTabela(botao) {
         var dados = dadosExportacao();
         if (!dados) { return; }
         var texto = [dados.cabecalho].concat(dados.linhas)
             .map(function (l) { return l.join('\t'); }).join('\n');
+        var rotulo = botao.innerHTML;
 
-        function aviso(ok) {
-            botao.innerHTML = ok
-                ? '<i class="fas fa-check"></i> Copiado'
-                : '<i class="fas fa-xmark"></i> Falhou';
-            setTimeout(function () { botao.innerHTML = '<i class="fas fa-copy"></i> Copiar'; }, 1800);
+        function aviso() {
+            botao.innerHTML = '<i class="fas fa-check"></i> Copiado';
+            setTimeout(function () { botao.innerHTML = rotulo; }, 1800);
+        }
+
+        function porSelecao() {
+            var ta = document.createElement('textarea');
+            ta.value = texto;
+            ta.setAttribute('readonly', 'readonly');
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            ta.setSelectionRange(0, texto.length);
+            var ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            document.body.removeChild(ta);
+            if (ok) { aviso(); } else { mostrarTextoParaCopiar(texto); }
         }
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(texto).then(function () { aviso(true); }, function () { aviso(false); });
+            navigator.clipboard.writeText(texto).then(aviso, porSelecao);
             return;
         }
-        var ta = document.createElement('textarea');
-        ta.value = texto;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        var ok = false;
-        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-        document.body.removeChild(ta);
-        aviso(ok);
+        porSelecao();
     }
 
     /* ------------------------------------------------------------------ *
