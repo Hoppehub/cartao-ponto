@@ -19,8 +19,9 @@
         ordem: {},
         mascarar: false,
         visaoEspelho: 'cartoes',
+        escalaTipo: 'sem44_8h48',
         jornadaMinutos: 480,
-        apenasDiasUteis: false,
+        escalaCustom: [0, 528, 528, 528, 528, 528, 0],
         nomesPadrao: null,
         nomesArquivo: null,
         nomesInfo: null,
@@ -75,8 +76,20 @@
         return Number(m[1]) * 60 + Number(m[2]);
     }
 
+    var DIAS_CURTOS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+    function escalaEmVigor() {
+        if (estado.escalaTipo === 'diaria') {
+            var m = estado.jornadaMinutos;
+            return [m, m, m, m, m, m, m];
+        }
+        if (estado.escalaTipo === 'custom') { return estado.escalaCustom.slice(); }
+        var pronta = AFD.ESCALAS[estado.escalaTipo];
+        return pronta ? pronta.dias.slice() : AFD.ESCALAS.sem44_8h48.dias.slice();
+    }
+
     function opcoesSaldo() {
-        return { jornadaMinutos: estado.jornadaMinutos, apenasDiasUteis: estado.apenasDiasUteis };
+        return { escala: escalaEmVigor() };
     }
 
     function classeSaldo(minutos) {
@@ -506,8 +519,26 @@
         }
 
         if (opcoes.jornada) {
-            partes.push('<div class="campo"><label for="fJornada">Jornada diária</label>' +
-                '<input type="time" id="fJornada" step="60" value="' + esc(horaDeMinutos(estado.jornadaMinutos)) + '"></div>');
+            var escala = escalaEmVigor();
+            var opcoesEscala = Object.keys(AFD.ESCALAS).map(function (k) {
+                return '<option value="' + k + '"' + (estado.escalaTipo === k ? ' selected' : '') + '>' +
+                    esc(AFD.ESCALAS[k].rotulo) + '</option>';
+            }).join('');
+            opcoesEscala += '<option value="diaria"' + (estado.escalaTipo === 'diaria' ? ' selected' : '') +
+                '>Mesma jornada em todo dia com marcação</option>';
+            opcoesEscala += '<option value="custom"' + (estado.escalaTipo === 'custom' ? ' selected' : '') +
+                '>Personalizada por dia da semana</option>';
+
+            partes.push('<div class="campo cresce"><label for="fEscala">Jornada contratual</label>' +
+                '<select id="fEscala">' + opcoesEscala + '</select></div>');
+
+            if (estado.escalaTipo === 'diaria') {
+                partes.push('<div class="campo"><label for="fJornada">Por dia</label>' +
+                    '<input type="time" id="fJornada" step="60" value="' + esc(horaDeMinutos(estado.jornadaMinutos)) + '"></div>');
+            }
+
+            partes.push('<div class="campo"><label>Total semanal</label>' +
+                '<span class="total-escala">' + esc(AFD.formatarMinutos(AFD.somaDaEscala(escala))) + '</span></div>');
         }
 
         if (opcoes.visao) {
@@ -520,18 +551,25 @@
         }
 
         partes.push('<div class="filtros-acoes">');
-        if (opcoes.jornada) {
-            partes.push('<label class="interruptor" title="Sábado e domingo passam a contar como saldo integral">' +
-                '<input type="checkbox" id="fDiasUteis"' + (estado.apenasDiasUteis ? ' checked' : '') +
-                '> Jornada só em dias úteis</label>');
-        }
         partes.push('<label class="interruptor"><input type="checkbox" id="fMascarar"' +
             (estado.mascarar ? ' checked' : '') + '> Ocultar documentos</label>');
         if (opcoes.exportar !== false) {
             partes.push('<button class="btn" id="btnCopiar"><i class="fas fa-copy"></i> Copiar</button>');
             partes.push('<button class="btn btn-primario" id="btnCsv"><i class="fas fa-file-csv"></i> Baixar CSV</button>');
         }
-        partes.push('</div></div>');
+        partes.push('</div>');
+
+        if (opcoes.jornada && estado.escalaTipo === 'custom') {
+            partes.push('<div class="escala-semana">');
+            DIAS_CURTOS.forEach(function (rot, i) {
+                partes.push('<label class="campo"><span>' + rot + '</span>' +
+                    '<input type="time" step="60" data-dia="' + i + '" value="' +
+                    esc(horaDeMinutos(estado.escalaCustom[i])) + '"></label>');
+            });
+            partes.push('</div>');
+        }
+
+        partes.push('</div>');
         return partes.join('');
     }
 
@@ -1002,8 +1040,9 @@
                     '<span>' + esc(AFD.formatarDataBR(d.data)) + '</span>' +
                     '<span class="dia-semana">' + esc(d.diaSemana) + '</span>' +
                     (d.impar ? '<span class="etiqueta alerta">marcação ímpar</span>' : '') +
-                    '<span class="dia-total">' + numeroBR(d.quantidade) + ' marcações · ' +
-                    esc(d.total) + ' de ' + esc(AFD.formatarMinutos(d.jornadaEsperada)) + '</span>' +
+                    '<span class="dia-total">' + numeroBR(d.quantidade) + ' marcações · ' + esc(d.total) +
+                    (d.jornadaEsperada ? ' de ' + esc(AFD.formatarMinutos(d.jornadaEsperada))
+                        : ' · sem jornada prevista') + '</span>' +
                     '</div>');
 
                 html.push('<div class="dia-horas">' +
@@ -1634,17 +1673,27 @@
             } else if (alvo.id === 'fMascarar') {
                 estado.mascarar = alvo.checked;
                 desenharConteudo();
+            } else if (alvo.id === 'fEscala') {
+                estado.escalaTipo = alvo.value;
+                try { localStorage.setItem('leitor-afd-escala', alvo.value); } catch (err) { /* modo privado */ }
+                desenharConteudo();
             } else if (alvo.id === 'fJornada') {
                 var min = minutosDeHora(alvo.value);
                 if (min !== null) {
                     estado.jornadaMinutos = min;
                     try { localStorage.setItem('leitor-afd-jornada', String(min)); } catch (err) { /* modo privado */ }
-                    desenharTabela();
+                    desenharConteudo();
                 }
-            } else if (alvo.id === 'fDiasUteis') {
-                estado.apenasDiasUteis = alvo.checked;
-                try { localStorage.setItem('leitor-afd-dias-uteis', alvo.checked ? '1' : '0'); } catch (err) { /* modo privado */ }
-                desenharTabela();
+            } else if (alvo.hasAttribute && alvo.hasAttribute('data-dia')) {
+                var dia = Number(alvo.getAttribute('data-dia'));
+                var valor = minutosDeHora(alvo.value);
+                if (valor !== null) {
+                    estado.escalaCustom[dia] = valor;
+                    try {
+                        localStorage.setItem('leitor-afd-escala-custom', JSON.stringify(estado.escalaCustom));
+                    } catch (err) { /* modo privado */ }
+                    desenharConteudo();
+                }
             }
         });
 
@@ -1700,7 +1749,12 @@
         if (visaoSalva === 'tabela' || visaoSalva === 'cartoes') { estado.visaoEspelho = visaoSalva; }
         var jornadaSalva = Number(localStorage.getItem('leitor-afd-jornada'));
         if (jornadaSalva > 0 && jornadaSalva <= 1440) { estado.jornadaMinutos = jornadaSalva; }
-        estado.apenasDiasUteis = localStorage.getItem('leitor-afd-dias-uteis') === '1';
+        var escalaSalva = localStorage.getItem('leitor-afd-escala');
+        if (escalaSalva && (AFD.ESCALAS[escalaSalva] || escalaSalva === 'diaria' || escalaSalva === 'custom')) {
+            estado.escalaTipo = escalaSalva;
+        }
+        var customSalva = JSON.parse(localStorage.getItem('leitor-afd-escala-custom') || 'null');
+        if (customSalva && customSalva.length === 7) { estado.escalaCustom = customSalva; }
     } catch (e) { /* modo privado */ }
 
     if (window.LEITOR_AFD_NOMES) {

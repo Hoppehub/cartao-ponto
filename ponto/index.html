@@ -383,6 +383,31 @@ body:not(.modo-analises) .painel-conteudo { border-radius: 10px; }
 .campo.cresce { flex: 1 1 220px; }
 .campo.cresce input { width: 100%; }
 .filtros-acoes { display: flex; gap: 8px; margin-left: auto; }
+.total-escala {
+    display: inline-block;
+    padding: 7px 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-color);
+}
+.escala-semana {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    padding-top: 10px;
+    margin-top: 2px;
+    border-top: 1px dashed var(--border-color);
+}
+.escala-semana .campo span {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.escala-semana input { min-width: 96px; }
+
 .interruptor { display: flex; align-items: center; gap: 7px; font-size: 0.8rem; color: var(--text-muted); cursor: pointer; }
 
 /* ---------------- tabelas ---------------- */

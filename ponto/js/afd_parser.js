@@ -1227,10 +1227,33 @@
      * opcoes.apenasDiasUteis  sabado e domingo passam a contar como saldo
      *                         integral (jornada esperada zero)
      */
+    /*
+     * Escalas prontas, em minutos por dia da semana (indice 0 = domingo).
+     * O limite constitucional e de 8h por dia e 44h por semana; as duas
+     * primeiras sao as formas usuais de fechar as 44h.
+     */
+    var ESCALAS = {
+        'sem44_8h48': { rotulo: '44h por semana — 8h48 de segunda a sexta', dias: [0, 528, 528, 528, 528, 528, 0] },
+        'sem44_sab': { rotulo: '44h por semana — 8h de segunda a sexta e 4h no sábado', dias: [0, 480, 480, 480, 480, 480, 240] },
+        'sem40': { rotulo: '40h por semana — 8h de segunda a sexta', dias: [0, 480, 480, 480, 480, 480, 0] },
+        'sem36': { rotulo: '36h por semana — 7h12 de segunda a sexta', dias: [0, 432, 432, 432, 432, 432, 0] },
+        'sem30': { rotulo: '30h por semana — 6h de segunda a sexta', dias: [0, 360, 360, 360, 360, 360, 0] }
+    };
+
+    function somaDaEscala(dias) {
+        return (dias || []).reduce(function (t, m) { return t + (Number(m) || 0); }, 0);
+    }
+
     function calcularSaldos(espelho, opcoes) {
         opcoes = opcoes || {};
         var jornada = opcoes.jornadaMinutos == null ? 480 : Number(opcoes.jornadaMinutos);
         var soUteis = !!opcoes.apenasDiasUteis;
+        var escala = null;
+        if (opcoes.escala && opcoes.escala.length === 7) {
+            escala = opcoes.escala.map(function (m) { return Number(m) || 0; });
+        } else if (opcoes.escala && ESCALAS[opcoes.escala]) {
+            escala = ESCALAS[opcoes.escala].dias;
+        }
 
         var pessoas = {};
         var semanas = {};
@@ -1253,7 +1276,12 @@
         }
 
         espelho.forEach(function (dia) {
-            dia.jornadaEsperada = (soUteis && ehFimDeSemana(dia.data)) ? 0 : jornada;
+            if (escala) {
+                var d = dataParaUTC(dia.data);
+                dia.jornadaEsperada = d ? escala[d.getUTCDay()] : jornada;
+            } else {
+                dia.jornadaEsperada = (soUteis && ehFimDeSemana(dia.data)) ? 0 : jornada;
+            }
             dia.saldo = dia.totalMinutos - dia.jornadaEsperada;
             dia.chaveSemana = inicioDaSemana(dia.data);
             dia.chaveMes = String(dia.data).slice(0, 7);
@@ -1381,6 +1409,8 @@
         detectarLayout: detectarLayout,
         montarEspelho: montarEspelho,
         calcularSaldos: calcularSaldos,
+        ESCALAS: ESCALAS,
+        somaDaEscala: somaDaEscala,
         lerListaDeNomes: lerListaDeNomes,
         normalizarListaDeNomes: normalizarListaDeNomes,
         validarCPF: validarCPF,

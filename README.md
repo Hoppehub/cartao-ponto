@@ -86,22 +86,45 @@ de um dia com número ímpar de batidas aparece com contorno tracejado.
 
 ### Saldo de horas
 
-O saldo compara o trabalhado no dia com a **jornada diária esperada** — 08:00 por padrão, ajustável no
-campo *Jornada diária*. Acima disso o saldo sai positivo (verde), abaixo sai negativo (vermelho). Nos
+O saldo compara o trabalhado no dia com a jornada esperada **daquele dia da semana**, definida no campo
+*Jornada contratual*. Acima disso o saldo sai positivo (verde), abaixo sai negativo (vermelho). Nos
 cartões, cada dia mostra o próprio saldo ao lado das batidas, e ao fim de cada semana e de cada mês entra
 uma faixa de fechamento com trabalhado, esperado e saldo do período. Na tabela, o saldo é uma coluna, e a
 faixa do trabalhador traz o total do período filtrado. A exportação em CSV leva jornada esperada e saldo.
+
+### Jornada contratual
+
+O limite constitucional é de 8h por dia **e 44h por semana** (CF, art. 7º, XIII), e são duas contas
+diferentes: 8h em cinco dias fecham 40h, não 44h. Por isso a jornada é uma escala por dia da semana, não um
+número único. As opções prontas:
+
+| Escala | Distribuição | Semana |
+|---|---|---|
+| **44h — 8h48 de segunda a sexta** (padrão) | 8h48 × 5 | 44:00 |
+| **44h — 8h de segunda a sexta e 4h no sábado** | 8h × 5 + 4h | 44:00 |
+| 40h — 8h de segunda a sexta | 8h × 5 | 40:00 |
+| 36h — 7h12 de segunda a sexta | 7h12 × 5 | 36:00 |
+| 30h — 6h de segunda a sexta | 6h × 5 | 30:00 |
+| Mesma jornada em todo dia com marcação | valor único | — |
+| Personalizada por dia da semana | sete campos | soma exibida |
+
+O total semanal da escala escolhida aparece ao lado do seletor, então dá para conferir de imediato se ela
+fecha as 44h. Dia sem jornada prevista na escala (domingo, ou sábado nas escalas de segunda a sexta)
+aparece como *sem jornada prevista* e o que for trabalhado entra inteiro como saldo positivo.
 
 Duas coisas que o AFD **não** informa e que por isso ficam de fora da conta:
 
 - **Dias sem marcação não entram.** O arquivo não distingue falta, folga, férias, atestado ou feriado, e
   descontar 08:00 de todo dia sem batida produziria um saldo negativo falso. Só entram os dias que têm
   marcação.
-- **Sábado, domingo e feriado** contam como dia normal por padrão. Se na sua regra o fim de semana é saldo
-  integral, marque *Jornada só em dias úteis*: sábado e domingo passam a ter jornada esperada zero.
+- **Feriado é dia normal para a escala.** O AFD não traz calendário, então um feriado na segunda-feira
+  continua esperando a jornada daquele dia. Quem trabalhou aparece com saldo pequeno em vez do saldo
+  integral que a regra do feriado daria.
+- **A escala não conhece acordo de compensação, banco de horas nem intervalo mínimo.** O saldo é a
+  diferença bruta entre o marcado e o contratado.
 
 O cálculo pareia as batidas do dia na ordem (1ª com 2ª, 3ª com 4ª...). Não aplica tolerância da
-Portaria 671, intervalo mínimo, adicional noturno nem jornada que vira o dia — é conferência, não folha.
+Portaria 671, adicional noturno nem jornada que vira o dia — é conferência, não folha.
 
 Além disso: busca e filtros (período, trabalhador, tipo de registro, gravidade), ordenação por coluna,
 exportação em CSV (separador `;`, com BOM, abre direto no Excel pt-BR), cópia para a área de transferência,

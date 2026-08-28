@@ -258,6 +258,42 @@ var somaDasPessoas = Object.keys(saldosEspelho.pessoas).reduce(function (t, k) {
 }, 0);
 igual(somaDasPessoas, saldosEspelho.total.saldo, 'total geral e a soma dos trabalhadores');
 
+/* escalas semanais: o que fecha as 44h da Constituicao */
+igual(AFD.somaDaEscala(AFD.ESCALAS['sem44_8h48'].dias), 44 * 60, 'escala de 8h48 de segunda a sexta soma 44h');
+igual(AFD.somaDaEscala(AFD.ESCALAS['sem44_sab'].dias), 44 * 60, 'escala com sabado de 4h tambem soma 44h');
+igual(AFD.somaDaEscala(AFD.ESCALAS['sem40'].dias), 40 * 60, 'escala de 8h de segunda a sexta soma 40h');
+
+/* uma semana cheia na escala de 8h48 */
+var semana48 = ['2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28'].map(function (d) {
+    return { chave: '1', data: d, horarios: ['08:00:00', '17:48:00'], totalMinutos: 588 };
+});
+var saldo48 = AFD.calcularSaldos(semana48, { escala: 'sem44_8h48' });
+igual(semana48[0].jornadaEsperada, 528, 'segunda espera 8h48');
+igual(AFD.formatarSaldo(semana48[0].saldo), '+01:00', 'dia de 9h48 na escala de 8h48');
+igual(saldo48.total.esperado, 44 * 60, 'a semana inteira espera 44h');
+igual(AFD.formatarSaldo(saldo48.total.saldo), '+05:00', 'saldo da semana');
+
+/* mesma semana na escala com sabado: sexta espera 8h e sabado 4h */
+var comSabado = [
+    { chave: '1', data: '2026-08-28', horarios: ['08:00:00', '16:00:00'], totalMinutos: 480 },
+    { chave: '1', data: '2026-08-29', horarios: ['08:00:00', '12:00:00'], totalMinutos: 240 }
+];
+AFD.calcularSaldos(comSabado, { escala: 'sem44_sab' });
+igual(comSabado[0].jornadaEsperada, 480, 'sexta espera 8h na escala com sabado');
+igual(comSabado[1].jornadaEsperada, 240, 'sabado espera 4h');
+igual(AFD.formatarSaldo(comSabado[1].saldo), '00:00', 'sabado de 4h fecha zerado');
+
+/* domingo nao tem jornada esperada em nenhuma escala pronta */
+var domingo = [{ chave: '1', data: '2026-08-30', horarios: ['08:00:00', '12:00:00'], totalMinutos: 240 }];
+AFD.calcularSaldos(domingo, { escala: 'sem44_8h48' });
+igual(domingo[0].jornadaEsperada, 0, 'domingo sem jornada esperada');
+igual(AFD.formatarSaldo(domingo[0].saldo), '+04:00', 'domingo trabalhado vira saldo integral');
+
+/* escala livre, informada em minutos por dia da semana */
+var livre = [{ chave: '1', data: '2026-08-25', horarios: ['08:00:00', '14:00:00'], totalMinutos: 360 }];
+AFD.calcularSaldos(livre, { escala: [0, 360, 360, 360, 360, 360, 0] });
+igual(AFD.formatarSaldo(livre[0].saldo), '00:00', 'escala personalizada de 6h');
+
 /* fim de semana pode contar como saldo integral */
 var sabado = { chave: '1', data: '2026-08-29', horarios: ['08:00:00', '12:00:00'], totalMinutos: 240 };
 AFD.calcularSaldos([sabado], { apenasDiasUteis: true });
