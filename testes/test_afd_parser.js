@@ -259,6 +259,31 @@ var somaDasPessoas = Object.keys(saldosEspelho.pessoas).reduce(function (t, k) {
 igual(somaDasPessoas, saldosEspelho.total.saldo, 'total geral e a soma dos trabalhadores');
 
 /* escalas semanais: o que fecha as 44h da Constituicao */
+igual(AFD.somaDaEscala(AFD.ESCALAS['sem44_9h_sex8h'].dias), 44 * 60, 'escala de 9h de seg a qui com sexta de 8h soma 44h');
+
+/* jornada real: entra 06:55, sai 16:55 com 1h de intervalo; sexta sai 15:55 */
+var semanaReal = [
+    { chave: '1', data: '2026-08-24', horarios: ['06:55:00', '11:55:00', '12:55:00', '16:55:00'], totalMinutos: 540 },
+    { chave: '1', data: '2026-08-25', horarios: ['06:55:00', '11:55:00', '12:55:00', '16:55:00'], totalMinutos: 540 },
+    { chave: '1', data: '2026-08-26', horarios: ['06:55:00', '11:55:00', '12:55:00', '16:55:00'], totalMinutos: 540 },
+    { chave: '1', data: '2026-08-27', horarios: ['06:55:00', '11:55:00', '12:55:00', '16:55:00'], totalMinutos: 540 },
+    { chave: '1', data: '2026-08-28', horarios: ['06:55:00', '11:55:00', '12:55:00', '15:55:00'], totalMinutos: 480 }
+];
+var saldoReal = AFD.calcularSaldos(semanaReal, { escala: 'sem44_9h_sex8h' });
+igual(semanaReal[0].jornadaEsperada, 540, 'segunda espera 9h');
+igual(semanaReal[4].jornadaEsperada, 480, 'sexta espera 8h');
+igual(saldoReal.total.minutos, 44 * 60, 'a semana cumprida soma 44h trabalhadas');
+igual(saldoReal.total.esperado, 44 * 60, 'a escala espera 44h');
+igual(AFD.formatarSaldo(saldoReal.total.saldo), '00:00', 'semana na jornada exata fecha zerada');
+igual(AFD.formatarSaldo(semanaReal[4].saldo), '00:00', 'sexta de 8h fecha zerada');
+
+/* meia hora a mais numa quarta aparece so nela */
+var comExtra = semanaReal.map(function (d) { return { chave: '1', data: d.data, horarios: d.horarios.slice(), totalMinutos: d.totalMinutos }; });
+comExtra[2].totalMinutos = 570;
+var saldoExtra = AFD.calcularSaldos(comExtra, { escala: 'sem44_9h_sex8h' });
+igual(AFD.formatarSaldo(comExtra[2].saldo), '+00:30', 'meia hora a mais na quarta');
+igual(AFD.formatarSaldo(saldoExtra.total.saldo), '+00:30', 'e a semana fecha com a mesma meia hora');
+
 igual(AFD.somaDaEscala(AFD.ESCALAS['sem44_8h48'].dias), 44 * 60, 'escala de 8h48 de segunda a sexta soma 44h');
 igual(AFD.somaDaEscala(AFD.ESCALAS['sem44_sab'].dias), 44 * 60, 'escala com sabado de 4h tambem soma 44h');
 igual(AFD.somaDaEscala(AFD.ESCALAS['sem40'].dias), 40 * 60, 'escala de 8h de segunda a sexta soma 40h');

@@ -1233,6 +1233,7 @@
      * primeiras sao as formas usuais de fechar as 44h.
      */
     var ESCALAS = {
+        'sem44_9h_sex8h': { rotulo: '44h por semana — 9h de segunda a quinta e 8h na sexta', dias: [0, 540, 540, 540, 540, 480, 0] },
         'sem44_8h48': { rotulo: '44h por semana — 8h48 de segunda a sexta', dias: [0, 528, 528, 528, 528, 528, 0] },
         'sem44_sab': { rotulo: '44h por semana — 8h de segunda a sexta e 4h no sábado', dias: [0, 480, 480, 480, 480, 480, 240] },
         'sem40': { rotulo: '40h por semana — 8h de segunda a sexta', dias: [0, 480, 480, 480, 480, 480, 0] },

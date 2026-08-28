@@ -100,13 +100,17 @@ número único. As opções prontas:
 
 | Escala | Distribuição | Semana |
 |---|---|---|
-| **44h — 8h48 de segunda a sexta** (padrão) | 8h48 × 5 | 44:00 |
+| **44h — 9h de segunda a quinta e 8h na sexta** (padrão) | 9h × 4 + 8h | 44:00 |
+| **44h — 8h48 de segunda a sexta** | 8h48 × 5 | 44:00 |
 | **44h — 8h de segunda a sexta e 4h no sábado** | 8h × 5 + 4h | 44:00 |
 | 40h — 8h de segunda a sexta | 8h × 5 | 40:00 |
 | 36h — 7h12 de segunda a sexta | 7h12 × 5 | 36:00 |
 | 30h — 6h de segunda a sexta | 6h × 5 | 30:00 |
 | Mesma jornada em todo dia com marcação | valor único | — |
 | Personalizada por dia da semana | sete campos | soma exibida |
+
+A escala padrão corresponde à jornada de entrada às 06:55 com saída às 16:55 (e 15:55 na sexta), com uma
+hora de intervalo: 9h trabalhadas de segunda a quinta e 8h na sexta, fechando as 44h nos cinco dias.
 
 O total semanal da escala escolhida aparece ao lado do seletor, então dá para conferir de imediato se ela
 fecha as 44h. Dia sem jornada prevista na escala (domingo, ou sábado nas escalas de segunda a sexta)
@@ -122,6 +126,8 @@ Duas coisas que o AFD **não** informa e que por isso ficam de fora da conta:
   integral que a regra do feriado daria.
 - **A escala não conhece acordo de compensação, banco de horas nem intervalo mínimo.** O saldo é a
   diferença bruta entre o marcado e o contratado.
+- **A escala vale para todo mundo.** Quem cumpre horário diferente do restante da equipe é comparado com a
+  mesma jornada; nesse caso, filtre por trabalhador e troque a escala antes de olhar o saldo dele.
 
 O cálculo pareia as batidas do dia na ordem (1ª com 2ª, 3ª com 4ª...). Não aplica tolerância da
 Portaria 671, adicional noturno nem jornada que vira o dia — é conferência, não folha.

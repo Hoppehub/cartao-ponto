@@ -19,9 +19,9 @@
         ordem: {},
         mascarar: false,
         visaoEspelho: 'cartoes',
-        escalaTipo: 'sem44_8h48',
+        escalaTipo: 'sem44_9h_sex8h',
         jornadaMinutos: 480,
-        escalaCustom: [0, 528, 528, 528, 528, 528, 0],
+        escalaCustom: [0, 540, 540, 540, 540, 480, 0],
         nomesPadrao: null,
         nomesArquivo: null,
         nomesInfo: null,
@@ -85,7 +85,7 @@
         }
         if (estado.escalaTipo === 'custom') { return estado.escalaCustom.slice(); }
         var pronta = AFD.ESCALAS[estado.escalaTipo];
-        return pronta ? pronta.dias.slice() : AFD.ESCALAS.sem44_8h48.dias.slice();
+        return pronta ? pronta.dias.slice() : AFD.ESCALAS.sem44_9h_sex8h.dias.slice();
     }
 
     function opcoesSaldo() {
