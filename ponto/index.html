@@ -163,6 +163,32 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .btn-icone { padding: 8px 10px; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
+/* ---------------- topo em uma linha ---------------- */
+.linha-topo { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 16px; }
+body.carregado .linha-topo { grid-template-columns: auto minmax(200px, 1fr) auto; align-items: stretch; }
+body.carregado .topo { margin-bottom: 0; }
+
+.btn-nerd {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 24px;
+    border: 2px solid var(--alerta);
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+}
+body.carregado .btn-nerd { display: flex; }
+.btn-nerd:hover { background: var(--alerta-fundo); color: var(--alerta); }
+.btn-nerd.ativo { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+
 /* ---------------- área de carga ---------------- */
 .zona {
     background: var(--card-bg);
@@ -178,6 +204,19 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .zona h2 { font-size: 1rem; margin-bottom: 4px; }
 .zona p { margin: 4px 0 0; color: var(--text-muted); font-size: 0.82rem; }
 .zona-acoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+
+body.carregado .zona {
+    padding: 0 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border-width: 2px;
+}
+body.carregado .zona h2 { font-size: 0.95rem; }
+body.carregado .zona p { display: none; }
+body.carregado .zona i.nuvem { font-size: 1.2rem; margin: 0; }
+body.carregado .so-inicial { display: none; }
 
 #areaColar { display: none; margin-top: 14px; }
 #areaColar textarea {
@@ -252,6 +291,12 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .cartao.erro .valor { color: var(--erro); }
 .cartao.alerta .valor { color: var(--alerta); }
 .cartao.ok .valor { color: var(--ok); }
+
+/* ---------------- modos: espelho (padrão) e análises ---------------- */
+#cartoes, #abas { display: none; }
+body.modo-analises #cartoes { display: grid; }
+body.modo-analises #abas { display: flex; }
+body:not(.modo-analises) .painel-conteudo { border-radius: 10px; }
 
 /* ---------------- abas ---------------- */
 .abas {
@@ -458,7 +503,10 @@ tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
     font-variant-numeric: tabular-nums;
     letter-spacing: .01em;
 }
-.doc-topo .nome-doc { font-size: 0.9rem; font-weight: 600; }
+.doc-topo .separador-doc { color: var(--text-muted); }
+.doc-topo .nome-doc { font-size: 1.05rem; font-weight: 700; color: var(--doc-cor); }
+.cartao-doc.grupo-b .nome-doc { color: var(--doc-cor-2); }
+.doc-topo .sem-nome { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
 .doc-topo .resumo-doc { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); }
 
 .dia-faixa {
@@ -613,6 +661,7 @@ tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
 </head>
 <body>
 
+<div class="linha-topo">
 <header class="topo">
     <div class="topo-titulo">
         <i class="fas fa-file-lines"></i>
@@ -629,20 +678,25 @@ tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
     </div>
 </header>
 
-<section id="secaoCarga">
     <div class="zona" id="zonaArquivo" tabindex="0" role="button" aria-label="Selecionar arquivo AFD">
         <i class="fas fa-cloud-arrow-up nuvem"></i>
-        <h2>Arraste o arquivo AFD aqui ou clique para selecionar</h2>
+        <h2 id="tituloZona">Arraste o arquivo AFD aqui ou clique para selecionar</h2>
         <p>Aceita .txt e .afd, nos leiautes da Portaria 1.510/2009 e da Portaria 671/2021.</p>
         <p>O arquivo é lido dentro do seu navegador &mdash; nada é enviado para servidores.</p>
         <input type="file" id="entradaArquivo" accept=".txt,.afd,.AFD,text/plain" hidden>
     </div>
 
+    <button class="btn-nerd" id="btnAnalises" title="Resumo, marcações, auditoria e arquivo bruto">
+        <i class="fas fa-chart-simple"></i> <span id="rotuloAnalises">Números para nerd</span>
+    </button>
+</div>
+
+<section id="secaoCarga">
     <div class="zona-acoes">
         <button class="btn" id="btnColar"><i class="fas fa-clipboard"></i> Colar conteúdo</button>
-        <button class="btn" id="btnDemo1510"><i class="fas fa-flask"></i> Exemplo 1.510/2009</button>
-        <button class="btn" id="btnDemo671"><i class="fas fa-flask"></i> Exemplo 671/2021</button>
-        <div class="campo">
+        <button class="btn so-inicial" id="btnDemo1510"><i class="fas fa-flask"></i> Exemplo 1.510/2009</button>
+        <button class="btn so-inicial" id="btnDemo671"><i class="fas fa-flask"></i> Exemplo 671/2021</button>
+        <div class="campo so-inicial">
             <select id="seletorLayout" title="Leiaute usado na leitura">
                 <option value="auto">Detectar leiaute automaticamente</option>
                 <option value="1510">Forçar Portaria 1.510/2009</option>

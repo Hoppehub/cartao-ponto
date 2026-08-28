@@ -14,6 +14,7 @@
         espelho: [],
         registrosPorLinha: {},
         aba: 'resumo',
+        modo: 'espelho',
         pagina: {},
         ordem: {},
         mascarar: false,
@@ -211,18 +212,23 @@
         estado.pagina = {};
         estado.ordem = {};
         estado.filtros = { busca: '', dataIni: '', dataFim: '', pessoa: '', tipo: '', nivel: '' };
-        estado.aba = 'resumo';
+        estado.aba = 'espelho';
 
         if (resultado.layout === 'desconhecido') {
             mostrarAviso('Não foi possível identificar o leiaute do arquivo. ' +
                 'Confira se é mesmo um AFD ou selecione o leiaute manualmente antes de carregar de novo.');
         }
 
+        estado.modo = 'espelho';
+        document.body.classList.add('carregado');
+        document.body.classList.remove('modo-analises');
+        $('tituloZona').textContent = 'Carregar outro arquivo';
+        atualizarBotaoAnalises();
+
         $('painel').hidden = false;
         desenharCartoes();
         desenharAbas();
         desenharConteudo();
-        $('painel').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     /* ------------------------------------------------------------------ *
@@ -289,6 +295,32 @@
     }
 
     /* ------------------------------------------------------------------ *
+     * Modos da tela: espelho de ponto (padrão) e demais análises
+     * ------------------------------------------------------------------ */
+
+    function atualizarBotaoAnalises() {
+        var analises = estado.modo === 'analises';
+        $('btnAnalises').classList.toggle('ativo', analises);
+        $('rotuloAnalises').textContent = analises ? 'Voltar ao espelho de ponto' : 'Números para nerd';
+        $('btnAnalises').querySelector('i').className = analises ? 'fas fa-arrow-left' : 'fas fa-chart-simple';
+    }
+
+    function trocarModo() {
+        if (estado.modo === 'analises') {
+            estado.modo = 'espelho';
+            estado.aba = 'espelho';
+        } else {
+            estado.modo = 'analises';
+            if (estado.aba === 'espelho') { estado.aba = 'resumo'; }
+        }
+        document.body.classList.toggle('modo-analises', estado.modo === 'analises');
+        atualizarBotaoAnalises();
+        desenharAbas();
+        desenharConteudo();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ------------------------------------------------------------------ *
      * Abas
      * ------------------------------------------------------------------ */
 
@@ -297,7 +329,6 @@
         return [
             { id: 'resumo', rotulo: 'Resumo', icone: 'fa-chart-simple' },
             { id: 'marcacoes', rotulo: 'Marcações', icone: 'fa-fingerprint', contador: r.marcacoes.length },
-            { id: 'espelho', rotulo: 'Espelho de ponto', icone: 'fa-table-list', contador: estado.espelho.length },
             { id: 'pessoas', rotulo: 'Trabalhadores', icone: 'fa-users', contador: r.pessoas.length },
             { id: 'empresa', rotulo: 'Empregador e REP', icone: 'fa-building' },
             { id: 'eventos', rotulo: 'Relógio e eventos', icone: 'fa-clock-rotate-left', contador: r.ajustes.length + r.eventos.length },
@@ -825,7 +856,9 @@
                 '<i class="fas fa-file-lines" style="color:var(--doc-cor)"></i>' +
                 '<span class="rotulo-doc">' + esc(g.tipo || 'Documento') + '</span>' +
                 '<span class="numero-doc">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
-                (g.nome ? '<span class="nome-doc">' + esc(g.nome) + '</span>' : '') +
+                (g.nome
+                    ? '<span class="separador-doc">-</span><span class="nome-doc">' + esc(g.nome) + '</span>'
+                    : '<span class="sem-nome">nome não informado no arquivo</span>') +
                 '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · saldo ' +
                 saldoHTML(saldos.pessoas[chave].saldo) + '</span>' +
                 '</header>');
@@ -860,9 +893,8 @@
                     '<span>' + esc(AFD.formatarDataBR(d.data)) + '</span>' +
                     '<span class="dia-semana">' + esc(d.diaSemana) + '</span>' +
                     (d.impar ? '<span class="etiqueta alerta">marcação ímpar</span>' : '') +
-                    '<span class="dia-total">' + numeroBR(d.quantidade) + ' marcação(ões) · ' +
-                    esc(d.total) + ' trabalhada(s) para ' + esc(AFD.formatarMinutos(d.jornadaEsperada)) +
-                    ' esperada(s)</span>' +
+                    '<span class="dia-total">' + numeroBR(d.quantidade) + ' marcações · ' +
+                    esc(d.total) + ' de ' + esc(AFD.formatarMinutos(d.jornadaEsperada)) + '</span>' +
                     '</div>');
 
                 html.push('<div class="dia-horas">' +
@@ -1454,6 +1486,7 @@
             estado.tamanhoArquivo = t.length;
             analisar(t);
         });
+        $('btnAnalises').addEventListener('click', trocarModo);
         $('btnDemo1510').addEventListener('click', function () { carregarDemo('1510'); });
         $('btnDemo671').addEventListener('click', function () { carregarDemo('671'); });
 

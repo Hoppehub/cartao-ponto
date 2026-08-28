@@ -6,6 +6,17 @@ Leitor e auditor do **Arquivo-Fonte de Dados (AFD)** do ponto eletrônico, nos l
 Tudo roda no navegador: o arquivo é lido em memória, nenhum byte é enviado para servidor algum —
 o que importa quando o AFD carrega CPF, PIS e a jornada de pessoas reais.
 
+## Como a tela se organiza
+
+Ao abrir um AFD a ferramenta vai direto para o **espelho de ponto** — é o que se usa no dia a dia. O topo
+fica com três blocos: identificação, *Carregar outro arquivo* (aceita arrastar) e o botão **Números para
+nerd**, que guarda todo o resto: resumo, marcações, trabalhadores, empregador e REP, relógio e eventos,
+inconsistências e arquivo bruto. Clicando nele a tela troca para as análises; clicando de novo volta ao
+espelho.
+
+No cartão de cada pessoa, o nome aparece ao lado do documento quando o arquivo traz o cadastro (registro
+tipo 5). Quando não traz — o que é comum em AFD de REP-C — fica a nota *nome não informado no arquivo*.
+
 ## O que a ferramenta entrega
 
 | Aba | Conteúdo |
