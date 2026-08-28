@@ -18,7 +18,27 @@ No cartão de cada pessoa, o nome aparece ao lado do documento quando o arquivo 
 tipo 5). Quando não traz — o que é comum em AFD de REP-C — fica a nota *nome não informado no arquivo*,
 e aí entra a lista de nomes.
 
-### Lista de nomes (opcional)
+### Nomes fixos da instalação
+
+`ponto/js/nomes_padrao.js` guarda uma lista de `documento: nome` que a ferramenta usa sozinha, sem
+depender de carregar arquivo:
+
+```js
+window.LEITOR_AFD_NOMES = {
+    '012341643576': 'ELIS REGINA DE BRAGA',
+    '023730884359': 'AUDENIZIA RIBEIRO NUNES'
+};
+```
+
+A chave pode ser PIS ou CPF, com ou sem pontuação e com ou sem zeros à esquerda. O arquivo vem vazio no
+repositório: preencha na sua instalação. **O conteúdo dele vai junto com a página** — em endereço público,
+nome e documento ficam legíveis por quem abrir o site. Para uso interno, proteja a pasta `/ponto` por senha
+no painel da hospedagem, ou deixe a lista vazia e use o botão abaixo a cada sessão.
+
+Cuidado ao atualizar a ferramenta: extrair um pacote novo por cima substitui esse arquivo. Guarde uma cópia
+da sua lista.
+
+### Lista de nomes carregada na hora (opcional)
 
 *Carregar lista de nomes* aceita um arquivo que case documento com nome, para quando o AFD não traz o
 cadastro dos empregados. Serve tanto o **export de usuários do REP** quanto qualquer arquivo de duas
@@ -38,7 +58,8 @@ o casamento ignora zeros à esquerda, e **CPF que perdeu o zero no export** (10 
 Linhas sem documento válido são ignoradas, o que já descarta os usuários administrativos do relógio.
 A mesma pessoa cadastrada duas vezes, uma por PIS e outra por CPF, é encontrada pelos dois caminhos.
 
-O nome do próprio AFD sempre tem prioridade; a lista só preenche quem ficou sem nome, e esses aparecem com
+A lista carregada complementa a fixa e vence em caso de conflito. O nome do próprio AFD sempre tem
+prioridade sobre as duas; elas só preenchem quem ficou sem nome, e esses aparecem com
 a marcação *nome vindo da lista carregada* ao passar o cursor. A lista vale enquanto a página estiver
 aberta — não fica gravada no navegador, e como todo o resto, não sai do seu computador.
 
@@ -115,6 +136,7 @@ ponto/                    pasta publicada — sobe inteira para o servidor
   index.html              página da ferramenta (interface e estilos)
   js/afd_parser.js        analisador do AFD — sem dependências, roda no navegador e no Node
   js/leitor_afd.js        interface: carga do arquivo, abas, filtros, exportação
+  js/nomes_padrao.js      lista fixa de documento/nome da sua instalação (vem vazia)
   exemplos/               arquivos AFD fictícios para teste
 testes/gerar_exemplos.js  gera os arquivos de exemplo
 testes/test_afd_parser.js testes do analisador

@@ -21,7 +21,8 @@
         visaoEspelho: 'cartoes',
         jornadaMinutos: 480,
         apenasDiasUteis: false,
-        nomes: null,
+        nomesPadrao: null,
+        nomesArquivo: null,
         nomesInfo: null,
         nomeArquivo: '',
         codificacao: '',
@@ -209,13 +210,25 @@
      * Nomes vindos da lista: o AFD manda quando traz cadastro (tipo 5);
      * a lista so preenche quem ficou sem nome.
      */
+    /* lista fixa da instalacao, complementada pela que o usuario carregar */
+    function nomesEmVigor() {
+        if (!estado.nomesPadrao && !estado.nomesArquivo) { return null; }
+        var mapa = {};
+        [estado.nomesPadrao, estado.nomesArquivo].forEach(function (fonte) {
+            if (!fonte) { return; }
+            Object.keys(fonte).forEach(function (k) { mapa[k] = fonte[k]; });
+        });
+        return mapa;
+    }
+
     function aplicarNomes() {
         if (!estado.resultado) { return 0; }
+        var mapa = nomesEmVigor();
         var casados = 0;
         estado.resultado.pessoas.forEach(function (p) {
-            if (estado.nomes && estado.nomes[p.chave]) {
+            if (mapa && mapa[p.chave]) {
                 if (!p.nome || p.nomeExterno) {
-                    p.nome = estado.nomes[p.chave];
+                    p.nome = mapa[p.chave];
                     p.nomeExterno = true;
                 }
                 casados += 1;
@@ -238,7 +251,8 @@
             alvo.hidden = true;
             return;
         }
-        var texto = numeroBR(estado.nomesInfo.total) + ' nome(s) na lista';
+        var texto = numeroBR(estado.nomesInfo.total) + ' nome(s) ' +
+            (estado.nomesInfo.origem === 'arquivo' ? 'na lista carregada' : 'na lista da ferramenta');
         if (estado.resultado) {
             texto += ' · ' + numeroBR(estado.nomesInfo.casados) + ' de ' +
                 numeroBR(estado.resultado.pessoas.length) + ' trabalhador(es) identificado(s)';
@@ -260,8 +274,11 @@
                 return;
             }
             mostrarAviso('');
-            estado.nomes = lista.nomes;
-            estado.nomesInfo = { total: lista.total, casados: 0, arquivo: arquivo.name };
+            estado.nomesArquivo = lista.nomes;
+            estado.nomesInfo = {
+                total: Object.keys(nomesEmVigor() || {}).length,
+                casados: 0, origem: 'arquivo', arquivo: arquivo.name
+            };
             estado.nomesInfo.casados = aplicarNomes();
             mostrarEstadoNomes();
             if (estado.resultado) {
@@ -274,9 +291,12 @@
     }
 
     function descartarNomes() {
-        estado.nomes = null;
-        estado.nomesInfo = null;
+        estado.nomesArquivo = null;
+        estado.nomesInfo = estado.nomesPadrao
+            ? { total: Object.keys(estado.nomesPadrao).length, casados: 0, origem: 'padrao' }
+            : null;
         aplicarNomes();
+        if (estado.nomesInfo) { estado.nomesInfo.casados = aplicarNomes(); }
         mostrarEstadoNomes();
         if (estado.resultado) {
             desenharCartoes();
@@ -289,7 +309,7 @@
         $('progresso').style.display = 'none';
         estado.resultado = resultado;
         estado.espelho = AFD.montarEspelho(resultado.marcacoes, resultado.pessoas);
-        if (estado.nomes) {
+        if (estado.nomesInfo) {
             estado.nomesInfo.casados = aplicarNomes();
         }
         mostrarEstadoNomes();
@@ -1682,6 +1702,14 @@
         if (jornadaSalva > 0 && jornadaSalva <= 1440) { estado.jornadaMinutos = jornadaSalva; }
         estado.apenasDiasUteis = localStorage.getItem('leitor-afd-dias-uteis') === '1';
     } catch (e) { /* modo privado */ }
+
+    if (window.LEITOR_AFD_NOMES) {
+        var padrao = AFD.normalizarListaDeNomes(window.LEITOR_AFD_NOMES);
+        if (padrao.total) {
+            estado.nomesPadrao = padrao.nomes;
+            estado.nomesInfo = { total: padrao.total, casados: 0, origem: 'padrao' };
+        }
+    }
 
     iniciarTema();
     ligarEventos();

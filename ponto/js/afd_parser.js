@@ -1349,6 +1349,23 @@
         return { nomes: nomes, total: total, ignorados: ignorados, repetidos: repetidos, separador: separador };
     }
 
+    /* Normaliza { documento: nome } para a chave usada na comparacao */
+    function normalizarListaDeNomes(objeto) {
+        var nomes = {};
+        var total = 0;
+        Object.keys(objeto || {}).forEach(function (doc) {
+            var nome = limpar(objeto[doc]);
+            if (!nome) { return; }
+            var digitos = apenasDigitos(doc);
+            if (digitos.length === 10) { digitos = '0' + digitos; }
+            var chave = chavePessoa(digitos || doc);
+            if (nomes[chave]) { return; }
+            nomes[chave] = nome;
+            total += 1;
+        });
+        return { nomes: nomes, total: total };
+    }
+
     /* ------------------------------------------------------------------ *
      * API publica
      * ------------------------------------------------------------------ */
@@ -1365,6 +1382,7 @@
         montarEspelho: montarEspelho,
         calcularSaldos: calcularSaldos,
         lerListaDeNomes: lerListaDeNomes,
+        normalizarListaDeNomes: normalizarListaDeNomes,
         validarCPF: validarCPF,
         validarPIS: validarPIS,
         validarCNPJ: validarCNPJ,
