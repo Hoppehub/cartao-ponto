@@ -38,6 +38,7 @@
     --barra: #2563eb;
     --grade: #e5e7eb;
     --doc-cor: #0e7490;
+    --doc-cor-2: #6d28d9;
     --faixa-bg: #f1f5f9;
     --chip-bg: #f5f3ff;
     --chip-borda: #8b5cf6;
@@ -87,6 +88,7 @@
     --barra: #4c93f8;
     --grade: #334155;
     --doc-cor: #22d3ee;
+    --doc-cor-2: #a78bfa;
     --faixa-bg: #172033;
     --chip-bg: #2e1065;
     --chip-borda: #7c3aed;
@@ -349,6 +351,41 @@ tbody tr:last-child td { border-bottom: none; }
 td.mono, .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 0.78rem; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .clicavel { cursor: pointer; }
+
+/* --- separacao entre trabalhadores na tabela --- */
+.tabela-agrupada tbody tr:nth-child(even) { background: none; }
+
+tr.linha-grupo td {
+    background: var(--faixa-bg);
+    border-top: 2px solid var(--border-color);
+    padding: 11px 12px;
+    font-weight: 600;
+    font-size: 0.84rem;
+}
+tr.linha-grupo:first-child td { border-top: none; }
+tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
+
+.doc-grupo {
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+}
+.rotulo-grupo { color: var(--text-muted); font-weight: 500; margin-right: 4px; }
+.nome-grupo { margin-left: 8px; }
+.resumo-grupo { color: var(--text-muted); font-weight: 400; margin-left: 8px; }
+
+/* traco lateral: alterna a cor a cada trabalhador */
+.tabela-agrupada tbody tr.grupo-a td:first-child,
+.tabela-agrupada tbody tr.linha-grupo.grupo-a td { border-left: 4px solid var(--doc-cor); }
+.tabela-agrupada tbody tr.grupo-b td:first-child,
+.tabela-agrupada tbody tr.linha-grupo.grupo-b td { border-left: 4px solid var(--doc-cor-2); }
+.linha-grupo.grupo-a .doc-grupo { color: var(--doc-cor); }
+.linha-grupo.grupo-b .doc-grupo { color: var(--doc-cor-2); }
+
+.cartao-doc.grupo-a { border-left: 4px solid var(--doc-cor); }
+.cartao-doc.grupo-b { border-left: 4px solid var(--doc-cor-2); }
+.cartao-doc.grupo-b .numero-doc { color: var(--doc-cor-2); }
 
 .etiqueta {
     display: inline-block;

@@ -20,7 +20,11 @@ o que importa quando o AFD carrega CPF, PIS e a jornada de pessoas reais.
 | **Arquivo bruto** | Linha a linha, com inspetor que abre cada registro campo a campo e mostra as posições |
 
 No espelho, o botão **Exibição** alterna entre cartões e tabela, e a escolha fica guardada no navegador
-para a próxima visita. Cada ficha de horário mostra o NSR do registro ao passar o cursor, e a última ficha
+para a próxima visita. Nas duas, cada trabalhador é separado do seguinte: na tabela, por uma faixa com o
+documento, o nome e o total do período, e por um traço lateral que alterna de cor a cada pessoa; nos
+cartões, pelo próprio cartão e pelo mesmo traço. Ordenar a tabela por uma coluna que embaralhe as pessoas
+(total trabalhado, por exemplo) desfaz as faixas e devolve o zebrado — ordenar por trabalhador ou por
+documento mantém o agrupamento. Cada ficha de horário mostra o NSR do registro ao passar o cursor, e a última ficha
 de um dia com número ímpar de batidas aparece com contorno tracejado.
 
 Além disso: busca e filtros (período, trabalhador, tipo de registro, gravidade), ordenação por coluna,

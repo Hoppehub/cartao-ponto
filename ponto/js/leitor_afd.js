@@ -429,7 +429,13 @@
         var visiveis = ordenadas.slice(fatia.inicio, fatia.fim);
         var ord = estado.ordem[chaveAba];
 
-        var html = ['<div class="rolagem"><table><thead><tr>'];
+        var agrupar = opcoes.agrupar;
+        if (agrupar && ord && !colunas[ord.indice].agrupavel) {
+            /* ordenação por outra coluna desfaz as sequências: sem faixas, volta o zebrado */
+            agrupar = null;
+        }
+
+        var html = ['<div class="rolagem"><table' + (agrupar ? ' class="tabela-agrupada"' : '') + '><thead><tr>'];
         colunas.forEach(function (c, i) {
             var seta = '';
             if (c.valor) {
@@ -442,9 +448,24 @@
         });
         html.push('</tr></thead><tbody>');
 
+        var grupoAtual = null;
+        var indiceGrupo = -1;
         visiveis.forEach(function (linha) {
+            var classeGrupo = '';
+            if (agrupar) {
+                var g = agrupar(linha);
+                if (g.chave !== grupoAtual) {
+                    grupoAtual = g.chave;
+                    indiceGrupo += 1;
+                    classeGrupo = indiceGrupo % 2 ? 'grupo-b' : 'grupo-a';
+                    html.push('<tr class="linha-grupo ' + classeGrupo + '">' +
+                        '<td colspan="' + colunas.length + '">' + g.html + '</td></tr>');
+                } else {
+                    classeGrupo = indiceGrupo % 2 ? 'grupo-b' : 'grupo-a';
+                }
+            }
             var atributos = opcoes.linhaAtributos ? opcoes.linhaAtributos(linha) : '';
-            html.push('<tr ' + atributos + '>');
+            html.push('<tr class="' + classeGrupo + '" ' + atributos + '>');
             colunas.forEach(function (c) {
                 html.push('<td class="' + (c.classe || '') + '">' + c.celula(linha) + '</td>');
             });
@@ -699,17 +720,8 @@
         });
     }
 
-    /*
-     * Visão em cartões: um cartão por documento, uma faixa por data e as
-     * batidas do dia como fichas logo abaixo.
-     */
-    function cartoesEspelho() {
-        var linhas = espelhoFiltrado();
-        if (!linhas.length) {
-            return '<div class="vazio"><i class="fas fa-inbox"></i>' +
-                'Nenhum dia de marcação para os filtros aplicados.</div>';
-        }
-
+    /* Junta os dias por documento; serve à visão em cartões e às faixas da tabela. */
+    function agruparPorDocumento(linhas) {
         var ordem = [];
         var grupos = {};
         linhas.forEach(function (l) {
@@ -729,22 +741,43 @@
             g.marcacoes += l.quantidade;
             g.minutos += l.totalMinutos;
         });
+        return { ordem: ordem, grupos: grupos };
+    }
+
+    function resumoDoGrupo(g) {
+        return numeroBR(g.dias.length) + ' dia(s) · ' + numeroBR(g.marcacoes) +
+            ' marcação(ões) · ' + AFD.formatarMinutos(g.minutos) + ' no total';
+    }
+
+    /*
+     * Visão em cartões: um cartão por documento, uma faixa por data e as
+     * batidas do dia como fichas logo abaixo.
+     */
+    function cartoesEspelho() {
+        var linhas = espelhoFiltrado();
+        if (!linhas.length) {
+            return '<div class="vazio"><i class="fas fa-inbox"></i>' +
+                'Nenhum dia de marcação para os filtros aplicados.</div>';
+        }
+
+        var agrupado = agruparPorDocumento(linhas);
+        var ordem = agrupado.ordem;
+        var grupos = agrupado.grupos;
 
         var fatia = fatiarPagina('espelho', ordem.length, POR_PAGINA_CARTOES, 'trabalhador(es)');
         var html = ['<div class="cartoes-doc">'];
 
-        ordem.slice(fatia.inicio, fatia.fim).forEach(function (chave) {
+        ordem.slice(fatia.inicio, fatia.fim).forEach(function (chave, i) {
             var g = grupos[chave];
             g.dias.sort(function (a, b) { return a.data < b.data ? -1 : (a.data > b.data ? 1 : 0); });
 
-            html.push('<section class="cartao-doc">');
+            html.push('<section class="cartao-doc ' + (i % 2 ? 'grupo-b' : 'grupo-a') + '">');
             html.push('<header class="doc-topo">' +
                 '<i class="fas fa-file-lines" style="color:var(--doc-cor)"></i>' +
                 '<span class="rotulo-doc">' + esc(g.tipo || 'Documento') + '</span>' +
                 '<span class="numero-doc">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
                 (g.nome ? '<span class="nome-doc">' + esc(g.nome) + '</span>' : '') +
-                '<span class="resumo-doc">' + numeroBR(g.dias.length) + ' dia(s) · ' +
-                numeroBR(g.marcacoes) + ' marcação(ões) · ' + esc(AFD.formatarMinutos(g.minutos)) + ' no total</span>' +
+                '<span class="resumo-doc">' + esc(resumoDoGrupo(g)) + '</span>' +
                 '</header>');
 
             g.dias.forEach(function (d) {
@@ -774,9 +807,12 @@
     }
 
     function tabelaEspelho() {
+        var linhas = espelhoFiltrado();
+        var grupos = agruparPorDocumento(linhas).grupos;
+
         var colunas = [
-            { titulo: 'Trabalhador', valor: function (e) { return e.nome || e.identificador; }, celula: function (e) { return esc(e.nome || '—'); } },
-            { titulo: 'Documento', classe: 'mono', celula: function (e) { return esc(documento(e.identificador, e.tipoIdentificador)); } },
+            { titulo: 'Trabalhador', agrupavel: true, valor: function (e) { return e.nome || e.identificador; }, celula: function (e) { return esc(e.nome || '—'); } },
+            { titulo: 'Documento', classe: 'mono', agrupavel: true, valor: function (e) { return e.identificador; }, celula: function (e) { return esc(documento(e.identificador, e.tipoIdentificador)); } },
             { titulo: 'Data', valor: function (e) { return e.data; }, celula: function (e) { return esc(AFD.formatarDataBR(e.data)); } },
             { titulo: 'Dia', celula: function (e) { return esc(e.diaSemana); } },
             { titulo: 'Marcações', classe: 'mono', celula: function (e) {
@@ -790,8 +826,19 @@
                     : '<span class="etiqueta ok">pares completos</span>';
             } }
         ];
-        return tabela('espelho', colunas, espelhoFiltrado(), {
-            vazio: 'Nenhum dia de marcação para os filtros aplicados.'
+        return tabela('espelho', colunas, linhas, {
+            vazio: 'Nenhum dia de marcação para os filtros aplicados.',
+            agrupar: function (e) {
+                var g = grupos[e.chave];
+                return {
+                    chave: e.chave,
+                    html: '<i class="fas fa-file-lines"></i> ' +
+                        '<span class="rotulo-grupo">' + esc(g.tipo || 'Documento') + '</span>' +
+                        '<span class="doc-grupo">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
+                        '<span class="nome-grupo">' + esc(g.nome || 'sem cadastro no arquivo') + '</span>' +
+                        '<span class="resumo-grupo">' + esc(resumoDoGrupo(g)) + '</span>'
+                };
+            }
         });
     }
 
