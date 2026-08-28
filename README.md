@@ -116,11 +116,25 @@ O total semanal da escala escolhida aparece ao lado do seletor, então dá para 
 fecha as 44h. Dia sem jornada prevista na escala (domingo, ou sábado nas escalas de segunda a sexta)
 aparece como *sem jornada prevista* e o que for trabalhado entra inteiro como saldo positivo.
 
-Duas coisas que o AFD **não** informa e que por isso ficam de fora da conta:
+### Faltas
 
-- **Dias sem marcação não entram.** O arquivo não distingue falta, folga, férias, atestado ou feriado, e
-  descontar 08:00 de todo dia sem batida produziria um saldo negativo falso. Só entram os dias que têm
-  marcação.
+Dia útil sem nenhuma marcação aparece como **FALTA**, no lugar das batidas, e desconta a jornada daquele
+dia do saldo. Só vira falta o dia em que a escala prevê trabalho: sábado e domingo vazios (nas escalas de
+segunda a sexta) continuam de fora.
+
+O campo *Faltas* controla a varredura:
+
+| Opção | O que faz |
+|---|---|
+| **Entre a 1ª e a última marcação** (padrão) | Procura dias vazios só dentro da janela em que a pessoa aparece no arquivo. Quem foi admitido no meio do mês não acumula falta antes de entrar. |
+| Em todo o período do arquivo | Varre o período declarado no cabeçalho para todo mundo. Use quando o quadro está estável no mês inteiro. |
+| Não marcar faltas | Volta ao comportamento anterior: só os dias com marcação. |
+
+Como o AFD **não distingue falta de folga, férias, atestado ou feriado**, tudo isso aparece como falta.
+Trate a marcação como ponto de partida da conferência, não como veredito: a justificativa está fora do
+arquivo.
+
+Uma coisa que o AFD **não** informa e que por isso fica de fora da conta:
 - **Feriado é dia normal para a escala.** O AFD não traz calendário, então um feriado na segunda-feira
   continua esperando a jornada daquele dia. Quem trabalhou aparece com saldo pequeno em vez do saldo
   integral que a regra do feriado daria.

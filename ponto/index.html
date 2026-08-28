@@ -622,6 +622,22 @@ tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
 .ficha-hora i { opacity: .75; font-size: 0.85em; }
 .ficha-hora.sem-par { border-style: dashed; }
 
+.etiqueta-falta {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 20px;
+    border-radius: 9px;
+    border: 1px dashed var(--erro);
+    background: var(--erro-fundo);
+    color: var(--erro);
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+}
+.dia-faixa.falta { background: var(--erro-fundo); }
+.dia-faixa.falta .dia-total { color: var(--erro); }
+
 .vazio { text-align: center; padding: 34px 16px; color: var(--text-muted); }
 .vazio i { font-size: 1.8rem; display: block; margin-bottom: 8px; opacity: .5; }
 

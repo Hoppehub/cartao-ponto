@@ -325,6 +325,56 @@ AFD.calcularSaldos([sabado], { apenasDiasUteis: true });
 igual(AFD.formatarSaldo(sabado.saldo), '+04:00', 'sabado vira saldo integral quando a jornada e so de dias uteis');
 
 /* ------------------------------------------------------------------ */
+grupo('Faltas');
+
+var escala44 = AFD.ESCALAS['sem44_9h_sex8h'].dias;
+
+function diaTrabalhado(data, minutos) {
+    return {
+        chave: '1', identificador: '11144477735', tipoIdentificador: 'CPF', nome: 'FULANO DE TAL',
+        data: data, diaSemana: AFD.diaDaSemana(data), horarios: ['06:55:00', '16:55:00'],
+        nsrs: ['1', '2'], quantidade: 2, totalMinutos: minutos, total: AFD.formatarMinutos(minutos), impar: false
+    };
+}
+
+/* segunda, terca e sexta trabalhadas: quarta e quinta viram falta */
+var semanaComFalta = AFD.incluirFaltas(
+    [diaTrabalhado('2026-08-24', 540), diaTrabalhado('2026-08-25', 540), diaTrabalhado('2026-08-28', 480)],
+    { escala: escala44 }
+);
+igual(semanaComFalta.length, 5, 'os dois dias uteis vazios entram na lista');
+var faltas = semanaComFalta.filter(function (d) { return d.falta; });
+igual(faltas.length, 2, 'duas faltas');
+igual(faltas[0].data, '2026-08-26', 'quarta faltou');
+igual(faltas[0].quantidade, 0, 'dia de falta nao tem marcacao');
+igual(faltas[0].total, '00:00', 'dia de falta nao tem hora trabalhada');
+
+var saldoComFalta = AFD.calcularSaldos(semanaComFalta, { escala: escala44 });
+igual(AFD.formatarSaldo(faltas[0].saldo), '-09:00', 'a quarta desconta a jornada inteira');
+igual(saldoComFalta.total.dias, 3, 'tres dias trabalhados');
+igual(saldoComFalta.total.faltas, 2, 'duas faltas contadas a parte');
+igual(AFD.formatarSaldo(saldoComFalta.total.saldo), '-18:00', 'saldo da semana com as duas faltas');
+
+/* sabado e domingo vazios nao viram falta na escala de segunda a sexta */
+var comFimDeSemana = AFD.incluirFaltas(
+    [diaTrabalhado('2026-08-28', 480), diaTrabalhado('2026-08-31', 540)], { escala: escala44 }
+);
+igual(comFimDeSemana.filter(function (d) { return d.falta; }).length, 0, 'sabado e domingo vazios nao sao falta');
+
+/* fora da janela do trabalhador nao ha falta: quem entrou depois nao devia nada antes */
+var soUmDia = AFD.incluirFaltas([diaTrabalhado('2026-08-27', 540)],
+    { escala: escala44, inicio: '2026-08-03', fim: '2026-08-31' });
+igual(soUmDia.filter(function (d) { return d.falta; }).length, 0, 'sem faltas fora da janela da propria pessoa');
+
+/* com todoPeriodo, a varredura usa o periodo do arquivo */
+var periodoInteiro = AFD.incluirFaltas([diaTrabalhado('2026-08-27', 540)],
+    { escala: escala44, inicio: '2026-08-24', fim: '2026-08-28', todoPeriodo: true });
+igual(periodoInteiro.filter(function (d) { return d.falta; }).length, 4, 'os outros quatro dias uteis viram falta');
+
+/* sem escala nao ha o que descontar */
+igual(AFD.incluirFaltas([diaTrabalhado('2026-08-24', 540)], {}).length, 1, 'sem escala o espelho passa intacto');
+
+/* ------------------------------------------------------------------ */
 grupo('Lista de nomes');
 
 /* formato do export de usuarios do REP */
