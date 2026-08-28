@@ -116,19 +116,34 @@ O total semanal da escala escolhida aparece ao lado do seletor, então dá para 
 fecha as 44h. Dia sem jornada prevista na escala (domingo, ou sábado nas escalas de segunda a sexta)
 aparece como *sem jornada prevista* e o que for trabalhado entra inteiro como saldo positivo.
 
-### Faltas
+### Cada dia recebe uma etiqueta
 
-Dia útil sem nenhuma marcação aparece como **FALTA**, no lugar das batidas, e desconta a jornada daquele
-dia do saldo. Só vira falta o dia em que a escala prevê trabalho: sábado e domingo vazios (nas escalas de
-segunda a sexta) continuam de fora.
+O AFD só registra quem bateu, então o dia vazio não existe no arquivo. A ferramenta completa o período e
+classifica cada dia pela escala:
 
-O campo *Faltas* controla a varredura:
+| Situação | Etiqueta | Saldo |
+|---|---|---|
+| Dia com jornada prevista e marcação | — (as batidas) | trabalhado − previsto |
+| Dia com jornada prevista e **sem** marcação | **FALTA** | desconta a jornada inteira |
+| Dia **sem** jornada prevista e sem marcação | **SÁBADO** / **DOMINGO** (o nome do dia) | zero |
+| Dia **sem** jornada prevista **com** marcação | **HORA EXTRA SÁBADO** / **DOMINGO** | tudo entra como saldo positivo |
+
+A regra segue a escala, não o calendário: se você escolher a escala *8h de segunda a sexta e 4h no sábado*,
+o sábado passa a ter jornada prevista — aí sábado vazio vira FALTA e sábado trabalhado é dia normal.
+
+O campo *Dias sem marcação* controla a varredura:
 
 | Opção | O que faz |
 |---|---|
-| **Entre a 1ª e a última marcação** (padrão) | Procura dias vazios só dentro da janela em que a pessoa aparece no arquivo. Quem foi admitido no meio do mês não acumula falta antes de entrar. |
+| **Entre a 1ª e a última marcação** (padrão) | Completa só a janela em que a pessoa aparece no arquivo. Quem foi admitido no meio do mês não acumula falta antes de entrar — e quem parou de bater antes do fim do período também não. |
 | Em todo o período do arquivo | Varre o período declarado no cabeçalho para todo mundo. Use quando o quadro está estável no mês inteiro. |
-| Não marcar faltas | Volta ao comportamento anterior: só os dias com marcação. |
+| Não completar os dias | Volta ao comportamento anterior: só os dias com marcação. |
+
+### Fechamento de semana e de mês
+
+Ao fim de cada semana e de cada mês entra um bloco com as métricas do período — trabalhadas, esperadas,
+dias trabalhados, faltas, dias extras — e o **saldo** em destaque, com moldura verde ou vermelha. Abaixo,
+uma barra mostra quanto da jornada do período foi cumprido.
 
 Como o AFD **não distingue falta de folga, férias, atestado ou feriado**, tudo isso aparece como falta.
 Trate a marcação como ponto de partida da conferência, não como veredito: a justificativa está fora do

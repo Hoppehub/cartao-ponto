@@ -544,13 +544,13 @@
             var opcoesFaltas = [
                 ['trabalhador', 'Entre a 1ª e a última marcação'],
                 ['arquivo', 'Em todo o período do arquivo'],
-                ['nao', 'Não marcar faltas']
+                ['nao', 'Não completar os dias']
             ].map(function (o) {
                 return '<option value="' + o[0] + '"' + (estado.faltas === o[0] ? ' selected' : '') + '>' +
                     esc(o[1]) + '</option>';
             }).join('');
-            partes.push('<div class="campo"><label for="fFaltas">Faltas</label>' +
-                '<select id="fFaltas" title="Dia útil sem marcação vira falta e desconta a jornada">' +
+            partes.push('<div class="campo"><label for="fFaltas">Dias sem marcação</label>' +
+                '<select id="fFaltas" title="Dia útil vazio vira falta e desconta a jornada; sábado e domingo recebem etiqueta">' +
                 opcoesFaltas + '</select></div>');
         }
 
@@ -945,7 +945,7 @@
 
         if (estado.faltas !== 'nao' && estado.resultado) {
             var res = estado.resultado.resumo;
-            base = AFD.incluirFaltas(base, {
+            base = AFD.completarDias(base, {
                 escala: escalaEmVigor(),
                 inicio: f.dataIni || res.periodoDeclarado.inicio || res.periodoReal.inicio,
                 fim: f.dataFim || res.periodoDeclarado.fim || res.periodoReal.fim,
@@ -970,6 +970,7 @@
                     dias: [],
                     marcacoes: 0,
                     faltas: 0,
+                    folgas: 0,
                     minutos: 0
                 };
                 ordem.push(l.chave);
@@ -978,13 +979,14 @@
             g.dias.push(l);
             g.marcacoes += l.quantidade;
             g.minutos += l.totalMinutos;
-            if (l.falta) { g.faltas += 1; }
+            if (l.tipo === 'falta') { g.faltas += 1; }
+            if (l.tipo === 'folga') { g.folgas += 1; }
         });
         return { ordem: ordem, grupos: grupos };
     }
 
     function resumoDoGrupo(g) {
-        var texto = numeroBR(g.dias.length - g.faltas) + ' dia(s) · ' + numeroBR(g.marcacoes) +
+        var texto = numeroBR(g.dias.length - g.faltas - g.folgas) + ' dia(s) · ' + numeroBR(g.marcacoes) +
             ' marcação(ões) · ' + AFD.formatarMinutos(g.minutos) + ' trabalhadas';
         var html = esc(texto);
         if (g.faltas) {
@@ -993,14 +995,41 @@
         return html;
     }
 
-    /* faixa de fechamento de semana ou de mês dentro do cartão */
-    function faixaSubtotal(classe, titulo, periodo, balde) {
-        return '<div class="subtotal ' + classe + '">' +
-            '<span class="titulo">' + esc(titulo) + '</span>' +
-            '<span class="periodo">' + esc(periodo) + ' · ' + numeroBR(balde.dias) + ' dia(s) · ' +
-            esc(AFD.formatarMinutos(balde.minutos)) + ' trabalhadas para ' +
-            esc(AFD.formatarMinutos(balde.esperado)) + ' esperadas</span>' +
-            '<span class="valor ' + classeSaldo(balde.saldo) + '">' + esc(AFD.formatarSaldo(balde.saldo)) + '</span>' +
+    function metrica(rotulo, valor, classe) {
+        return '<div class="metrica ' + (classe || '') + '">' +
+            '<span class="rotulo">' + esc(rotulo) + '</span>' +
+            '<span class="valor">' + valor + '</span></div>';
+    }
+
+    /* fechamento de semana ou de mês, dentro do cartão do trabalhador */
+    function blocoFechamento(classe, titulo, icone, periodo, balde) {
+        var cumprido = balde.esperado > 0 ? Math.round((balde.minutos / balde.esperado) * 100) : 0;
+        var largura = Math.max(0, Math.min(100, cumprido));
+        var sinal = classeSaldo(balde.saldo);
+
+        var metricas = [
+            metrica('Trabalhadas', esc(AFD.formatarMinutos(balde.minutos))),
+            metrica('Esperadas', esc(AFD.formatarMinutos(balde.esperado))),
+            metrica('Dias trabalhados', numeroBR(balde.dias))
+        ];
+        if (balde.faltas) { metricas.push(metrica('Faltas', '<span class="negativo">' + numeroBR(balde.faltas) + '</span>')); }
+        if (balde.extras) { metricas.push(metrica('Dias extras', numeroBR(balde.extras))); }
+        metricas.push(metrica('Saldo', '<span class="' + sinal + '">' + esc(AFD.formatarSaldo(balde.saldo)) + '</span>',
+            'destaque ' + sinal));
+
+        return '<div class="fechamento ' + classe + '">' +
+            '<div class="fechamento-topo">' +
+            '<span class="fechamento-titulo"><i class="fas ' + icone + '"></i> ' + esc(titulo) + '</span>' +
+            '<span class="fechamento-periodo">' + esc(periodo) + '</span>' +
+            '</div>' +
+            '<div class="fechamento-metricas">' + metricas.join('') + '</div>' +
+            (balde.esperado > 0
+                ? '<div class="medidor"><div class="medidor-trilho">' +
+                  '<div class="medidor-preenchido ' + (balde.saldo >= 0 ? 'positivo' : 'negativo') +
+                  '" style="width:' + largura + '%"></div></div>' +
+                  '<span class="medidor-texto">' + numeroBR(cumprido) + '% da jornada ' +
+                  (classe === 'mes' ? 'do mês' : 'da semana') + ' cumprida</span></div>'
+                : '') +
             '</div>';
     }
 
@@ -1048,7 +1077,7 @@
             function fecharSemana() {
                 if (!semanaAberta) { return; }
                 var b = pessoa.semanas[semanaAberta];
-                html.push(faixaSubtotal('semana', 'Saldo da semana',
+                html.push(blocoFechamento('semana', 'Fechamento da semana', 'fa-calendar-week',
                     AFD.formatarDataBR(b.inicio) + ' a ' + AFD.formatarDataBR(b.fim), b));
                 semanaAberta = null;
             }
@@ -1056,7 +1085,7 @@
             function fecharMes() {
                 if (!mesAberto) { return; }
                 var b = pessoa.meses[mesAberto];
-                html.push(faixaSubtotal('mes', 'Saldo do mês', b.rotulo, b));
+                html.push(blocoFechamento('mes', 'Fechamento do mês', 'fa-calendar-days', b.rotulo, b));
                 mesAberto = null;
             }
 
@@ -1066,28 +1095,40 @@
                 semanaAberta = d.chaveSemana;
                 mesAberto = d.chaveMes;
 
-                html.push('<div class="dia-faixa' + (d.falta ? ' falta' : '') + '">' +
+                var tipo = d.tipo || 'normal';
+                var resumoDia;
+                if (tipo === 'falta') {
+                    resumoDia = 'sem marcação · desconta ' + esc(AFD.formatarMinutos(d.jornadaEsperada));
+                } else if (tipo === 'folga') {
+                    resumoDia = 'sem marcação · sem jornada prevista';
+                } else if (tipo === 'extra') {
+                    resumoDia = numeroBR(d.quantidade) + ' marcações · ' + esc(d.total) + ' · tudo como saldo';
+                } else {
+                    resumoDia = numeroBR(d.quantidade) + ' marcações · ' + esc(d.total) +
+                        ' de ' + esc(AFD.formatarMinutos(d.jornadaEsperada));
+                }
+
+                html.push('<div class="dia-faixa ' + tipo + '">' +
                     '<i class="fas fa-calendar-days"></i>' +
                     '<span>' + esc(AFD.formatarDataBR(d.data)) + '</span>' +
                     '<span class="dia-semana">' + esc(d.diaSemana) + '</span>' +
                     (d.impar ? '<span class="etiqueta alerta">marcação ímpar</span>' : '') +
-                    '<span class="dia-total">' +
-                    (d.falta
-                        ? 'sem marcação · desconta ' + esc(AFD.formatarMinutos(d.jornadaEsperada))
-                        : numeroBR(d.quantidade) + ' marcações · ' + esc(d.total) +
-                          (d.jornadaEsperada ? ' de ' + esc(AFD.formatarMinutos(d.jornadaEsperada))
-                              : ' · sem jornada prevista')) +
-                    '</span></div>');
+                    '<span class="dia-total">' + resumoDia + '</span></div>');
 
-                var fichas = d.falta
-                    ? '<span class="etiqueta-falta"><i class="fas fa-user-xmark"></i> FALTA</span>'
-                    : d.horarios.map(function (h, i) {
-                        var semPar = d.impar && i === d.horarios.length - 1;
-                        var nsr = d.nsrs && d.nsrs[i] ? d.nsrs[i] : '';
-                        return '<span class="ficha-hora' + (semPar ? ' sem-par' : '') + '"' +
-                            (nsr ? ' title="NSR ' + esc(nsr) + (semPar ? ' — sem par no dia' : '') + '"' : '') + '>' +
-                            '<i class="fas fa-clock"></i>' + esc(h.slice(0, 5)) + '</span>';
-                    }).join('');
+                var etiquetaDia = d.etiqueta
+                    ? '<span class="etiqueta-dia ' + tipo + '">' +
+                      '<i class="fas ' + (tipo === 'falta' ? 'fa-user-xmark'
+                          : (tipo === 'extra' ? 'fa-clock-rotate-left' : 'fa-mug-hot')) + '"></i> ' +
+                      esc(d.etiqueta) + '</span>'
+                    : '';
+
+                var fichas = d.horarios.map(function (h, i) {
+                    var semPar = d.impar && i === d.horarios.length - 1;
+                    var nsr = d.nsrs && d.nsrs[i] ? d.nsrs[i] : '';
+                    return '<span class="ficha-hora' + (semPar ? ' sem-par' : '') + '"' +
+                        (nsr ? ' title="NSR ' + esc(nsr) + (semPar ? ' — sem par no dia' : '') + '"' : '') + '>' +
+                        '<i class="fas fa-clock"></i>' + esc(h.slice(0, 5)) + '</span>';
+                }).join('') + etiquetaDia;
 
                 html.push('<div class="dia-horas">' +
                     '<div class="fichas">' + fichas + '</div>' +
@@ -1117,14 +1158,19 @@
             { titulo: 'Data', valor: function (e) { return e.data; }, celula: function (e) { return esc(AFD.formatarDataBR(e.data)); } },
             { titulo: 'Dia', celula: function (e) { return esc(e.diaSemana); } },
             { titulo: 'Marcações', classe: 'mono', celula: function (e) {
-                if (e.falta) { return '<span class="etiqueta erro">FALTA</span>'; }
-                return e.horarios.map(function (h) { return esc(h.slice(0, 5)); }).join(' &nbsp; ');
+                var marcas = e.horarios.map(function (h) { return esc(h.slice(0, 5)); }).join(' &nbsp; ');
+                if (!e.etiqueta) { return marcas; }
+                var cor = e.tipo === 'falta' ? 'erro' : (e.tipo === 'extra' ? 'alerta' : 'neutra');
+                var selo = '<span class="etiqueta ' + cor + '">' + esc(e.etiqueta) + '</span>';
+                return marcas ? marcas + ' &nbsp; ' + selo : selo;
             } },
             { titulo: 'Qtde.', classe: 'num', valor: function (e) { return e.quantidade; }, celula: function (e) { return numeroBR(e.quantidade); } },
             { titulo: 'Total trabalhado', classe: 'num mono', valor: function (e) { return e.totalMinutos; }, celula: function (e) { return esc(e.total); } },
             { titulo: 'Saldo', classe: 'num mono', valor: function (e) { return e.saldo; }, celula: function (e) { return saldoHTML(e.saldo); } },
             { titulo: 'Situação', celula: function (e) {
-                if (e.falta) { return '<span class="etiqueta erro">falta em dia útil</span>'; }
+                if (e.tipo === 'falta') { return '<span class="etiqueta erro">falta em dia útil</span>'; }
+                if (e.tipo === 'folga') { return '<span class="etiqueta neutra">sem jornada prevista</span>'; }
+                if (e.tipo === 'extra') { return '<span class="etiqueta alerta">hora extra</span>'; }
                 return e.impar
                     ? '<span class="etiqueta alerta">marcação ímpar</span>'
                     : '<span class="etiqueta ok">pares completos</span>';
@@ -1370,9 +1416,10 @@
                     'Total trabalhado', 'Jornada esperada', 'Saldo', 'Situacao'],
                 linhas: diasEspelho.map(function (e) {
                     return [e.nome, documento(e.identificador, e.tipoIdentificador), AFD.formatarDataBR(e.data),
-                        e.diaSemana, e.falta ? 'FALTA' : e.horarios.map(function (h) { return h.slice(0, 5); }).join(' '),
+                        e.diaSemana,
+                        e.horarios.map(function (h) { return h.slice(0, 5); }).join(' ') || e.etiqueta || '',
                         e.quantidade, e.total, AFD.formatarMinutos(e.jornadaEsperada), AFD.formatarSaldo(e.saldo),
-                        e.falta ? 'Falta em dia util' : (e.impar ? 'Marcacao impar' : 'Pares completos')];
+                        e.etiqueta || (e.impar ? 'Marcacao impar' : 'Pares completos')];
                 })
             };
         case 'pessoas':

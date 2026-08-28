@@ -338,14 +338,15 @@ function diaTrabalhado(data, minutos) {
 }
 
 /* segunda, terca e sexta trabalhadas: quarta e quinta viram falta */
-var semanaComFalta = AFD.incluirFaltas(
+var semanaComFalta = AFD.completarDias(
     [diaTrabalhado('2026-08-24', 540), diaTrabalhado('2026-08-25', 540), diaTrabalhado('2026-08-28', 480)],
     { escala: escala44 }
 );
 igual(semanaComFalta.length, 5, 'os dois dias uteis vazios entram na lista');
-var faltas = semanaComFalta.filter(function (d) { return d.falta; });
+var faltas = semanaComFalta.filter(function (d) { return d.tipo === 'falta'; });
 igual(faltas.length, 2, 'duas faltas');
 igual(faltas[0].data, '2026-08-26', 'quarta faltou');
+igual(faltas[0].etiqueta, 'FALTA', 'etiqueta do dia util vazio');
 igual(faltas[0].quantidade, 0, 'dia de falta nao tem marcacao');
 igual(faltas[0].total, '00:00', 'dia de falta nao tem hora trabalhada');
 
@@ -356,23 +357,36 @@ igual(saldoComFalta.total.faltas, 2, 'duas faltas contadas a parte');
 igual(AFD.formatarSaldo(saldoComFalta.total.saldo), '-18:00', 'saldo da semana com as duas faltas');
 
 /* sabado e domingo vazios nao viram falta na escala de segunda a sexta */
-var comFimDeSemana = AFD.incluirFaltas(
+var comFimDeSemana = AFD.completarDias(
     [diaTrabalhado('2026-08-28', 480), diaTrabalhado('2026-08-31', 540)], { escala: escala44 }
 );
-igual(comFimDeSemana.filter(function (d) { return d.falta; }).length, 0, 'sabado e domingo vazios nao sao falta');
+igual(comFimDeSemana.filter(function (d) { return d.tipo === 'falta'; }).length, 0, 'sabado e domingo vazios nao sao falta');
+igual(comFimDeSemana.filter(function (d) { return d.tipo === 'folga'; }).map(function (d) { return d.etiqueta; }).join(','),
+    'SÁBADO,DOMINGO', 'sabado e domingo vazios recebem a etiqueta do proprio dia');
+
+/* sabado trabalhado: tudo vira saldo e ganha etiqueta de hora extra */
+var sabadoTrabalhado = AFD.completarDias([diaTrabalhado('2026-08-29', 300)], { escala: escala44 });
+AFD.calcularSaldos(sabadoTrabalhado, { escala: escala44 });
+igual(sabadoTrabalhado[0].tipo, 'extra', 'sabado com marcacao e dia extra');
+igual(sabadoTrabalhado[0].etiqueta, 'HORA EXTRA SÁBADO', 'etiqueta do sabado trabalhado');
+igual(AFD.formatarSaldo(sabadoTrabalhado[0].saldo), '+05:00', 'as horas do sabado entram inteiras no saldo');
+
+/* domingo trabalhado segue a mesma regra */
+var domingoTrabalhado = AFD.completarDias([diaTrabalhado('2026-08-30', 240)], { escala: escala44 });
+igual(domingoTrabalhado[0].etiqueta, 'HORA EXTRA DOMINGO', 'etiqueta do domingo trabalhado');
 
 /* fora da janela do trabalhador nao ha falta: quem entrou depois nao devia nada antes */
-var soUmDia = AFD.incluirFaltas([diaTrabalhado('2026-08-27', 540)],
+var soUmDia = AFD.completarDias([diaTrabalhado('2026-08-27', 540)],
     { escala: escala44, inicio: '2026-08-03', fim: '2026-08-31' });
-igual(soUmDia.filter(function (d) { return d.falta; }).length, 0, 'sem faltas fora da janela da propria pessoa');
+igual(soUmDia.filter(function (d) { return d.tipo === 'falta'; }).length, 0, 'sem faltas fora da janela da propria pessoa');
 
 /* com todoPeriodo, a varredura usa o periodo do arquivo */
-var periodoInteiro = AFD.incluirFaltas([diaTrabalhado('2026-08-27', 540)],
+var periodoInteiro = AFD.completarDias([diaTrabalhado('2026-08-27', 540)],
     { escala: escala44, inicio: '2026-08-24', fim: '2026-08-28', todoPeriodo: true });
-igual(periodoInteiro.filter(function (d) { return d.falta; }).length, 4, 'os outros quatro dias uteis viram falta');
+igual(periodoInteiro.filter(function (d) { return d.tipo === 'falta'; }).length, 4, 'os outros quatro dias uteis viram falta');
 
 /* sem escala nao ha o que descontar */
-igual(AFD.incluirFaltas([diaTrabalhado('2026-08-24', 540)], {}).length, 1, 'sem escala o espelho passa intacto');
+igual(AFD.completarDias([diaTrabalhado('2026-08-24', 540)], {}).length, 1, 'sem escala o espelho passa intacto');
 
 /* ------------------------------------------------------------------ */
 grupo('Lista de nomes');

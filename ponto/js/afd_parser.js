@@ -1217,9 +1217,14 @@
     }
 
     /*
-     * Faltas: o AFD so registra quem bateu, entao o dia sem marcacao
-     * simplesmente nao existe no arquivo. Aqui os dias uteis vazios viram
-     * linhas de falta, com a jornada do dia descontada.
+     * Classifica cada dia do periodo e cria as linhas que o AFD nao tem.
+     * O arquivo so registra quem bateu, entao o dia vazio nao existe nele.
+     *
+     * Com a escala em maos, cada dia vira um destes casos:
+     *   normal  dia com jornada prevista e marcacao
+     *   falta   dia com jornada prevista e nenhuma marcacao   -> desconta
+     *   folga   dia sem jornada prevista e nenhuma marcacao   -> etiqueta do dia
+     *   extra   dia sem jornada prevista, mas com marcacao    -> tudo vira saldo
      *
      * opcoes.escala          minutos por dia da semana (indice 0 = domingo)
      * opcoes.inicio/fim      periodo a varrer (AAAA-MM-DD)
@@ -1228,16 +1233,31 @@
      *                        para nao acusar falta antes da admissao
      * opcoes.limiteDias      teto de dias varridos por pessoa (padrao 400)
      */
-    function incluirFaltas(espelho, opcoes) {
+    function completarDias(espelho, opcoes) {
         opcoes = opcoes || {};
         var escala = opcoes.escala && opcoes.escala.length === 7 ? opcoes.escala : null;
         if (!escala || !somaDaEscala(escala)) { return espelho.slice(); }
+
+        function classificar(dia) {
+            var d = dataParaUTC(dia.data);
+            var prevista = d ? escala[d.getUTCDay()] : 0;
+            var nomeDia = diaDaSemana(dia.data).toUpperCase();
+            if (prevista > 0) {
+                dia.tipo = 'normal';
+                dia.etiqueta = '';
+            } else {
+                dia.tipo = 'extra';
+                dia.etiqueta = 'HORA EXTRA ' + nomeDia;
+            }
+            return dia;
+        }
 
         var limite = opcoes.limiteDias || 400;
         var pessoas = {};
         var ordem = [];
 
         espelho.forEach(function (dia) {
+            classificar(dia);
             if (!pessoas[dia.chave]) {
                 pessoas[dia.chave] = { modelo: dia, datas: {}, primeira: dia.data, ultima: dia.data };
                 ordem.push(dia.chave);
@@ -1265,7 +1285,9 @@
             while (d <= limiteData && contador < limite) {
                 contador += 1;
                 var iso = d.toISOString().slice(0, 10);
-                if (!p.datas[iso] && escala[d.getUTCDay()] > 0) {
+                if (!p.datas[iso]) {
+                    var prevista = escala[d.getUTCDay()];
+                    var nomeDia = DIAS_SEMANA[d.getUTCDay()].toUpperCase();
                     saida.push({
                         chave: chave,
                         identificador: p.modelo.identificador,
@@ -1282,7 +1304,9 @@
                         totalMinutos: 0,
                         total: '00:00',
                         impar: false,
-                        falta: true
+                        tipo: prevista > 0 ? 'falta' : 'folga',
+                        falta: prevista > 0,
+                        etiqueta: prevista > 0 ? 'FALTA' : nomeDia
                     });
                 }
                 d.setUTCDate(d.getUTCDate() + 1);
@@ -1341,13 +1365,16 @@
         var pessoas = {};
         var semanas = {};
         var meses = {};
-        var total = { dias: 0, faltas: 0, minutos: 0, esperado: 0, saldo: 0 };
+        var total = { dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0 };
 
         function acumular(alvo, dia) {
-            if (dia.falta) {
+            if (dia.tipo === 'falta') {
                 alvo.faltas = (alvo.faltas || 0) + 1;
+            } else if (dia.tipo === 'folga') {
+                alvo.folgas = (alvo.folgas || 0) + 1;
             } else {
                 alvo.dias += 1;
+                if (dia.tipo === 'extra') { alvo.extras = (alvo.extras || 0) + 1; }
             }
             alvo.minutos += dia.totalMinutos;
             alvo.esperado += dia.jornadaEsperada;
@@ -1356,7 +1383,7 @@
 
         function balde(mapa, chave, extra) {
             if (!mapa[chave]) {
-                mapa[chave] = { chave: chave, dias: 0, faltas: 0, minutos: 0, esperado: 0, saldo: 0 };
+                mapa[chave] = { chave: chave, dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0 };
                 if (extra) { Object.keys(extra).forEach(function (k) { mapa[chave][k] = extra[k]; }); }
             }
             return mapa[chave];
@@ -1376,7 +1403,7 @@
             var p = pessoas[dia.chave];
             if (!p) {
                 p = pessoas[dia.chave] = {
-                    chave: dia.chave, dias: 0, faltas: 0, minutos: 0, esperado: 0, saldo: 0,
+                    chave: dia.chave, dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0,
                     semanas: {}, meses: {}
                 };
             }
@@ -1496,7 +1523,7 @@
         detectarLayout: detectarLayout,
         montarEspelho: montarEspelho,
         calcularSaldos: calcularSaldos,
-        incluirFaltas: incluirFaltas,
+        completarDias: completarDias,
         ESCALAS: ESCALAS,
         somaDaEscala: somaDaEscala,
         lerListaDeNomes: lerListaDeNomes,
