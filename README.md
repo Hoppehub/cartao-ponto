@@ -48,28 +48,33 @@ máscara de documentos para compartilhar relatório sem expor CPF/PIS, tema clar
 ## Arquivos
 
 ```
-leitor_afd.html          página da ferramenta (interface e estilos)
-js/afd_parser.js         analisador do AFD — sem dependências, roda no navegador e no Node
-js/leitor_afd.js         interface: carga do arquivo, abas, filtros, exportação
-exemplos/                arquivos AFD fictícios para teste
-testes/gerar_exemplos.js gera os arquivos de exemplo
+ponto/                    pasta publicada — sobe inteira para o servidor
+  index.html              página da ferramenta (interface e estilos)
+  js/afd_parser.js        analisador do AFD — sem dependências, roda no navegador e no Node
+  js/leitor_afd.js        interface: carga do arquivo, abas, filtros, exportação
+  exemplos/               arquivos AFD fictícios para teste
+testes/gerar_exemplos.js  gera os arquivos de exemplo
 testes/test_afd_parser.js testes do analisador
 ```
+
+A pasta `ponto/` é o site: o que está dentro dela é exatamente o que fica em
+`fortman.com.br/ponto/`. Não há build, bundler nem dependência de servidor —
+são três arquivos estáticos.
 
 ## Como abrir para testar
 
 Três caminhos, do mais rápido ao definitivo:
 
-1. **Direto do disco.** Baixe a branch e abra `leitor_afd.html` com dois cliques. Funciona em `file://`,
+1. **Direto do disco.** Baixe a branch e abra `ponto/index.html` com dois cliques. Funciona em `file://`,
    sem servidor — os botões de exemplo montam um AFD fictício na hora.
    ```bash
    git clone -b claude/afd-reader-z3q16c https://github.com/GITHUPPE/ftm.git
    ```
-2. **Servidor local**, se preferir testar como fica publicado:
+2. **Servidor local**, para ver igual ao que vai ao ar:
    ```bash
-   npx http-server .    # depois abra http://127.0.0.1:8080/leitor_afd.html
+   npx http-server .    # depois abra http://127.0.0.1:8080/ponto/
    ```
-3. **No ar, junto do Ahtools**, seguindo a integração descrita abaixo.
+3. **No ar**, seguindo a publicação abaixo.
 
 ## Como usar
 
@@ -77,8 +82,47 @@ Abra `leitor_afd.html` no navegador e arraste o AFD, ou clique para selecionar.
 Os botões **Exemplo 1.510/2009** e **Exemplo 671/2021** montam um arquivo fictício na hora,
 útil para conhecer a ferramenta sem expor dados reais.
 
-Para publicar dentro do Ahtools, copie `leitor_afd.html`, `js/afd_parser.js` e `js/leitor_afd.js`
-para a raiz do site e acrescente o item ao menu (por exemplo no bloco *Validador* do `index.html`):
+## Publicar em fortman.com.br/ponto
+
+O domínio está na Hostinger (nameservers `dns-parking.com`), então a publicação é uma cópia de pasta
+para dentro de `public_html` — sem build e sem configuração de servidor.
+
+### Pelo Gerenciador de Arquivos (caminho mais curto)
+
+1. hPanel → **Arquivos → Gerenciador de arquivos** e entre em `public_html`.
+2. Envie o `ponto.zip` (a pasta `ponto/` deste repositório, compactada) para dentro de `public_html`.
+3. Clique com o botão direito no `.zip` → **Extrair**. Você deve ficar com `public_html/ponto/index.html`.
+4. Apague o `.zip` e acesse **https://fortman.com.br/ponto**.
+
+### Por FTP
+
+hPanel → **Arquivos → Contas de FTP** para pegar servidor, usuário e senha; no FileZilla, arraste a pasta
+`ponto` inteira para dentro de `public_html`. O resultado precisa ser `public_html/ponto/index.html`.
+
+### Conferir depois de publicar
+
+- `https://fortman.com.br/ponto` abre a ferramenta (o servidor acrescenta a barra final sozinho).
+- Os botões **Exemplo 1.510/2009** e **Exemplo 671/2021** carregam o resumo — se carregarem, os dois
+  arquivos de `js/` subiram certo. Página em branco quase sempre é `js/` faltando ou fora de lugar.
+- O cadeado do HTTPS aparece sem aviso de conteúdo misto.
+
+### Atualizar depois
+
+Substitua os arquivos alterados (normalmente `ponto/js/*.js`). O navegador guarda cache: recarregue com
+**Ctrl+F5**, e se precisar forçar para todo mundo, mude a versão na chamada do script dentro do
+`index.html`, por exemplo `js/leitor_afd.js?v=2`.
+
+### Observações
+
+- Se `fortman.com.br` roda WordPress, a pasta `/ponto` continua funcionando: a regra padrão do WordPress
+  só reescreve o que **não** existe em disco, e uma pasta real tem precedência.
+- A pasta `exemplos/` só serve para teste. Pode apagar do servidor sem afetar a ferramenta — os botões de
+  exemplo geram o arquivo na hora, dentro do navegador.
+
+## Publicar também dentro do Ahtools
+
+Copie `ponto/index.html` como `leitor_afd.html` para a raiz do Ahtools, junto com `js/afd_parser.js` e
+`js/leitor_afd.js`, e acrescente o item ao menu (por exemplo no bloco *Validador* do `index.html`):
 
 ```html
 <div class="flyout-item" data-tab="tab50" data-src="leitor_afd.html" data-title="Leitor de AFD">

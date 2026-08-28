@@ -6,9 +6,9 @@
 
 var fs = require('fs');
 var path = require('path');
-var AFD = require('../js/afd_parser.js');
+var AFD = require('../ponto/js/afd_parser.js');
 
-var EXEMPLOS = path.join(__dirname, '..', 'exemplos');
+var EXEMPLOS = path.join(__dirname, '..', 'ponto', 'exemplos');
 var falhas = 0;
 var testes = 0;
 

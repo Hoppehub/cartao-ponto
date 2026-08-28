@@ -11,7 +11,7 @@ var fs = require('fs');
 var path = require('path');
 var crypto = require('crypto');
 
-var DIR = path.join(__dirname, '..', 'exemplos');
+var DIR = path.join(__dirname, '..', 'ponto', 'exemplos');
 
 /* ---------- documentos ---------- */
 
