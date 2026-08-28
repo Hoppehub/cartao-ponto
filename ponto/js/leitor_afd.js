@@ -21,6 +21,8 @@
         visaoEspelho: 'cartoes',
         jornadaMinutos: 480,
         apenasDiasUteis: false,
+        nomes: null,
+        nomesInfo: null,
         nomeArquivo: '',
         codificacao: '',
         tamanhoArquivo: 0,
@@ -203,10 +205,94 @@
         setTimeout(passo, 0);
     }
 
+    /*
+     * Nomes vindos da lista: o AFD manda quando traz cadastro (tipo 5);
+     * a lista so preenche quem ficou sem nome.
+     */
+    function aplicarNomes() {
+        if (!estado.resultado) { return 0; }
+        var casados = 0;
+        estado.resultado.pessoas.forEach(function (p) {
+            if (estado.nomes && estado.nomes[p.chave]) {
+                if (!p.nome || p.nomeExterno) {
+                    p.nome = estado.nomes[p.chave];
+                    p.nomeExterno = true;
+                }
+                casados += 1;
+            } else if (p.nomeExterno) {
+                p.nome = '';
+                p.nomeExterno = false;
+            }
+        });
+        estado.resultado.pessoas.sort(function (a, b) {
+            return (a.nome || '\uFFFF').localeCompare(b.nome || '\uFFFF', 'pt-BR');
+        });
+        estado._mapaNomes = null;
+        estado.espelho = AFD.montarEspelho(estado.resultado.marcacoes, estado.resultado.pessoas);
+        return casados;
+    }
+
+    function mostrarEstadoNomes() {
+        var alvo = $('estadoNomes');
+        if (!estado.nomesInfo) {
+            alvo.hidden = true;
+            return;
+        }
+        var texto = numeroBR(estado.nomesInfo.total) + ' nome(s) na lista';
+        if (estado.resultado) {
+            texto += ' · ' + numeroBR(estado.nomesInfo.casados) + ' de ' +
+                numeroBR(estado.resultado.pessoas.length) + ' trabalhador(es) identificado(s)';
+        }
+        $('textoNomes').textContent = texto;
+        alvo.hidden = false;
+    }
+
+    function carregarNomes(arquivo) {
+        if (!arquivo) { return; }
+        var leitor = new FileReader();
+        leitor.onerror = function () { mostrarAviso('Não foi possível ler a lista de nomes.'); };
+        leitor.onload = function () {
+            var d = decodificar(leitor.result);
+            var lista = AFD.lerListaDeNomes(d.texto);
+            if (!lista.total) {
+                mostrarAviso('Nenhum nome reconhecido na lista. O arquivo precisa ter uma coluna de documento ' +
+                    '(PIS ou CPF) e uma de nome, separadas por ponto e vírgula, vírgula ou tabulação.');
+                return;
+            }
+            mostrarAviso('');
+            estado.nomes = lista.nomes;
+            estado.nomesInfo = { total: lista.total, casados: 0, arquivo: arquivo.name };
+            estado.nomesInfo.casados = aplicarNomes();
+            mostrarEstadoNomes();
+            if (estado.resultado) {
+                desenharCartoes();
+                desenharAbas();
+                desenharConteudo();
+            }
+        };
+        leitor.readAsArrayBuffer(arquivo);
+    }
+
+    function descartarNomes() {
+        estado.nomes = null;
+        estado.nomesInfo = null;
+        aplicarNomes();
+        mostrarEstadoNomes();
+        if (estado.resultado) {
+            desenharCartoes();
+            desenharAbas();
+            desenharConteudo();
+        }
+    }
+
     function concluir(resultado) {
         $('progresso').style.display = 'none';
         estado.resultado = resultado;
         estado.espelho = AFD.montarEspelho(resultado.marcacoes, resultado.pessoas);
+        if (estado.nomes) {
+            estado.nomesInfo.casados = aplicarNomes();
+        }
+        mostrarEstadoNomes();
         estado.registrosPorLinha = {};
         resultado.registros.forEach(function (r) { estado.registrosPorLinha[r.numeroLinha] = r; });
         estado.pagina = {};
@@ -798,6 +884,7 @@
                     identificador: l.identificador,
                     tipo: l.tipoIdentificador,
                     nome: l.nome,
+                    nomeExterno: l.nomeExterno,
                     dias: [],
                     marcacoes: 0,
                     minutos: 0
@@ -857,7 +944,9 @@
                 '<span class="rotulo-doc">' + esc(g.tipo || 'Documento') + '</span>' +
                 '<span class="numero-doc">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
                 (g.nome
-                    ? '<span class="separador-doc">-</span><span class="nome-doc">' + esc(g.nome) + '</span>'
+                    ? '<span class="separador-doc">-</span><span class="nome-doc"' +
+                      (g.nomeExterno ? ' title="Nome vindo da lista carregada, não do AFD"' : '') + '>' +
+                      esc(g.nome) + '</span>'
                     : '<span class="sem-nome">nome não informado no arquivo</span>') +
                 '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · saldo ' +
                 saldoHTML(saldos.pessoas[chave].saldo) + '</span>' +
@@ -1486,6 +1575,13 @@
             estado.tamanhoArquivo = t.length;
             analisar(t);
         });
+        $('btnNomes').addEventListener('click', function () { $('entradaNomes').click(); });
+        $('entradaNomes').addEventListener('change', function () {
+            var campo = $('entradaNomes');
+            if (campo.files && campo.files[0]) { carregarNomes(campo.files[0]); }
+            campo.value = '';
+        });
+        $('btnRemoverNomes').addEventListener('click', descartarNomes);
         $('btnAnalises').addEventListener('click', trocarModo);
         $('btnDemo1510').addEventListener('click', function () { carregarDemo('1510'); });
         $('btnDemo671').addEventListener('click', function () { carregarDemo('671'); });

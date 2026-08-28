@@ -15,7 +15,32 @@ inconsistências e arquivo bruto. Clicando nele a tela troca para as análises; 
 espelho.
 
 No cartão de cada pessoa, o nome aparece ao lado do documento quando o arquivo traz o cadastro (registro
-tipo 5). Quando não traz — o que é comum em AFD de REP-C — fica a nota *nome não informado no arquivo*.
+tipo 5). Quando não traz — o que é comum em AFD de REP-C — fica a nota *nome não informado no arquivo*,
+e aí entra a lista de nomes.
+
+### Lista de nomes (opcional)
+
+*Carregar lista de nomes* aceita um arquivo que case documento com nome, para quando o AFD não traz o
+cadastro dos empregados. Serve tanto o **export de usuários do REP** quanto qualquer arquivo de duas
+colunas:
+
+```
+pis;nome;administrador;matricula;rfid;codigo;senha;barras;digitais
+12065478502;ANA PAULA RODRIGUES SOUZA;0;53;53;53;;0000000053;SUNSUzIx...
+
+# ou, simplesmente:
+12065478502;Ana Paula Rodrigues Souza
+11144477735;Carlos Eduardo Martins
+```
+
+Separador `;`, `,` ou tabulação, detectado sozinho; cabeçalho é opcional. O documento pode ser PIS ou CPF —
+o casamento ignora zeros à esquerda, e **CPF que perdeu o zero no export** (10 dígitos) é recomposto.
+Linhas sem documento válido são ignoradas, o que já descarta os usuários administrativos do relógio.
+A mesma pessoa cadastrada duas vezes, uma por PIS e outra por CPF, é encontrada pelos dois caminhos.
+
+O nome do próprio AFD sempre tem prioridade; a lista só preenche quem ficou sem nome, e esses aparecem com
+a marcação *nome vindo da lista carregada* ao passar o cursor. A lista vale enquanto a página estiver
+aberta — não fica gravada no navegador, e como todo o resto, não sai do seu computador.
 
 ## O que a ferramenta entrega
 

@@ -232,6 +232,20 @@ body.carregado .so-inicial { display: none; }
     resize: vertical;
 }
 
+.estado-nomes {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px 4px 12px;
+    border-radius: 20px;
+    background: var(--ok-fundo);
+    color: var(--ok);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.estado-nomes[hidden] { display: none; }
+.estado-nomes .btn-icone { padding: 2px 6px; border: none; background: none; color: inherit; }
+
 .progresso {
     display: none;
     margin-top: 16px;
@@ -694,6 +708,14 @@ tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
 <section id="secaoCarga">
     <div class="zona-acoes">
         <button class="btn" id="btnColar"><i class="fas fa-clipboard"></i> Colar conteúdo</button>
+        <button class="btn" id="btnNomes" title="Arquivo com documento e nome, para o AFD que não traz o cadastro dos empregados">
+            <i class="fas fa-address-book"></i> Carregar lista de nomes
+        </button>
+        <input type="file" id="entradaNomes" accept=".txt,.csv,.TXT,.CSV,text/plain" hidden>
+        <span class="estado-nomes" id="estadoNomes" hidden>
+            <i class="fas fa-check"></i> <span id="textoNomes"></span>
+            <button class="btn btn-icone" id="btnRemoverNomes" title="Descartar a lista"><i class="fas fa-xmark"></i></button>
+        </span>
         <button class="btn so-inicial" id="btnDemo1510"><i class="fas fa-flask"></i> Exemplo 1.510/2009</button>
         <button class="btn so-inicial" id="btnDemo671"><i class="fas fa-flask"></i> Exemplo 671/2021</button>
         <div class="campo so-inicial">

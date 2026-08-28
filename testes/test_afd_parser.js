@@ -264,6 +264,58 @@ AFD.calcularSaldos([sabado], { apenasDiasUteis: true });
 igual(AFD.formatarSaldo(sabado.saldo), '+04:00', 'sabado vira saldo integral quando a jornada e so de dias uteis');
 
 /* ------------------------------------------------------------------ */
+grupo('Lista de nomes');
+
+/* formato do export de usuarios do REP */
+var listaREP = AFD.lerListaDeNomes(
+    'pis;nome;administrador;matricula;rfid;codigo;senha;barras;digitais\r\n' +
+    '12065478502;ANA PAULA RODRIGUES SOUZA ;0;53;53;53;;0000000053;SUNSUzIxAAAH\r\n' +
+    '20987654327;CARLOS EDUARDO MARTINS;0;0;0;0;;;\r\n' +
+    '0;ADMIN DO RELOGIO;1;0;0;0;;;\r\n' +
+    '15;Suporte;1;0;0;15;1234;;\r\n'
+);
+igual(listaREP.total, 2, 'le os dois trabalhadores do export de usuarios');
+igual(listaREP.ignorados, 2, 'descarta os usuarios administrativos sem documento');
+igual(listaREP.separador, ';', 'separador detectado');
+igual(listaREP.nomes[AFD.chavePessoa('12065478502')], 'ANA PAULA RODRIGUES SOUZA', 'nome pelo PIS, sem espaco sobrando');
+
+/* duas colunas simples, sem cabecalho */
+var listaSimples = AFD.lerListaDeNomes('11144477735,Fulano de Tal\n52998224725,Beltrano\n');
+igual(listaSimples.total, 2, 'arquivo de duas colunas separado por virgula');
+igual(listaSimples.nomes[AFD.chavePessoa('11144477735')], 'Fulano de Tal', 'nome pelo CPF');
+
+/* CPF que perdeu o zero a esquerda no export */
+var listaZero = AFD.lerListaDeNomes('documento;nome\n6769043432;Sicrana da Silva\n');
+igual(listaZero.total, 1, 'documento de 10 digitos e aproveitado');
+igual(listaZero.nomes[AFD.chavePessoa('06769043432')], 'Sicrana da Silva', 'zero a esquerda reposto no CPF');
+
+/* a mesma pessoa cadastrada por PIS e por CPF chega pelos dois caminhos */
+var listaDupla = AFD.lerListaDeNomes('pis;nome\n12065478502;Ana Paula\n11144477735;Ana Paula\n');
+igual(listaDupla.total, 2, 'dois documentos da mesma pessoa entram como duas chaves');
+
+/* tabulacao e aspas */
+var listaTab = AFD.lerListaDeNomes('pis\tnome\n12065478502\t"SOUZA, ANA"\n');
+igual(listaTab.nomes[AFD.chavePessoa('12065478502')], 'SOUZA, ANA', 'separador por tabulacao com aspas');
+
+/* arquivo que nao serve */
+igual(AFD.lerListaDeNomes('isto nao e uma lista').total, 0, 'texto solto nao vira lista');
+igual(AFD.lerListaDeNomes('').total, 0, 'arquivo vazio');
+
+/* o nome da lista chega ao espelho */
+var pessoasComLista = r1510.pessoas.map(function (p) {
+    return { chave: p.chave, identificador: p.identificador, tipoIdentificador: p.tipoIdentificador,
+        nome: '', nomeExterno: false };
+});
+pessoasComLista.forEach(function (p) {
+    var n = listaREP.nomes[p.chave];
+    if (n) { p.nome = n; p.nomeExterno = true; }
+});
+var espelhoComLista = AFD.montarEspelho(r1510.marcacoes, pessoasComLista);
+var diaComNome = espelhoComLista.filter(function (d) { return d.nome; })[0];
+ok(!!diaComNome, 'o espelho recebe o nome vindo da lista');
+igual(diaComNome.nomeExterno, true, 'a origem do nome fica marcada');
+
+/* ------------------------------------------------------------------ */
 grupo('Robustez');
 
 var semQuebras = ler('afd_1510_exemplo.txt', 'latin1').replace(/\r?\n/g, '');

@@ -1172,6 +1172,7 @@
                     identificador: m.identificador,
                     tipoIdentificador: m.tipoIdentificador || p.tipoIdentificador || '',
                     nome: p.nome || '',
+                    nomeExterno: !!p.nomeExterno,
                     data: m.data,
                     diaSemana: diaDaSemana(m.data),
                     entradas: [],
@@ -1275,6 +1276,79 @@
         return { pessoas: pessoas, semanas: semanas, meses: meses, total: total };
     }
 
+    /*
+     * Lista de nomes: casa documento com nome para o AFD que nao traz
+     * cadastro de empregado (registro tipo 5).
+     *
+     * Aceita o export de usuarios do REP (pis;nome;administrador;...) e
+     * qualquer arquivo com duas colunas, documento e nome, separadas por
+     * ponto e virgula, virgula ou tabulacao.
+     */
+    function lerListaDeNomes(texto) {
+        var linhas = String(texto == null ? '' : texto).replace(/^\uFEFF/, '').split(/\r\n|\n|\r/);
+        var nomes = {};
+        var total = 0;
+        var ignorados = 0;
+        var repetidos = 0;
+
+        var primeira = '';
+        for (var i = 0; i < linhas.length; i++) {
+            if (linhas[i] && linhas[i].trim()) { primeira = linhas[i]; break; }
+        }
+        if (!primeira) { return { nomes: nomes, total: 0, ignorados: 0, repetidos: 0, separador: '' }; }
+
+        var separadores = [';', '\t', ','];
+        var separador = separadores[0];
+        var maior = -1;
+        separadores.forEach(function (sep) {
+            var qtd = primeira.split(sep).length;
+            if (qtd > maior) { maior = qtd; separador = sep; }
+        });
+        if (maior < 2) { return { nomes: nomes, total: 0, ignorados: 0, repetidos: 0, separador: '' }; }
+
+        var colDoc = 0;
+        var colNome = 1;
+        var cabecalho = primeira.split(separador).map(function (c) {
+            return c.replace(/"/g, '').trim().toLowerCase();
+        });
+        var temCabecalho = cabecalho.some(function (c) {
+            return c === 'pis' || c === 'cpf' || c === 'nome' || c === 'documento' || c === 'pis/cpf';
+        }) && !/\d{8}/.test(primeira);
+
+        if (temCabecalho) {
+            var achaDoc = ['pis', 'cpf', 'documento', 'doc', 'pis/cpf'];
+            cabecalho.forEach(function (c, idx) {
+                if (achaDoc.indexOf(c) >= 0 && colDoc === 0) { colDoc = idx; }
+                if (c.indexOf('nome') >= 0 && colNome === 1) { colNome = idx; }
+            });
+            var idxDoc = -1;
+            cabecalho.forEach(function (c, idx) { if (achaDoc.indexOf(c) >= 0 && idxDoc < 0) { idxDoc = idx; } });
+            if (idxDoc >= 0) { colDoc = idxDoc; }
+        }
+
+        linhas.forEach(function (linha, indice) {
+            if (!linha || !linha.trim()) { return; }
+            if (temCabecalho && linha === primeira) { return; }
+            if (!temCabecalho && indice === 0 && /nome/i.test(linha) && !/\d{8}/.test(linha)) { return; }
+
+            var partes = linha.split(separador);
+            var doc = apenasDigitos(partes[colDoc] || '');
+            var nome = limpar((partes[colNome] || '').replace(/"/g, ''));
+
+            /* CPF que perdeu o zero a esquerda no export */
+            if (doc.length === 10) { doc = '0' + doc; }
+
+            if (doc.length < 11 || !nome) { ignorados += 1; return; }
+
+            var chave = chavePessoa(doc);
+            if (nomes[chave]) { repetidos += 1; return; }
+            nomes[chave] = nome;
+            total += 1;
+        });
+
+        return { nomes: nomes, total: total, ignorados: ignorados, repetidos: repetidos, separador: separador };
+    }
+
     /* ------------------------------------------------------------------ *
      * API publica
      * ------------------------------------------------------------------ */
@@ -1290,6 +1364,7 @@
         detectarLayout: detectarLayout,
         montarEspelho: montarEspelho,
         calcularSaldos: calcularSaldos,
+        lerListaDeNomes: lerListaDeNomes,
         validarCPF: validarCPF,
         validarPIS: validarPIS,
         validarCNPJ: validarCNPJ,
