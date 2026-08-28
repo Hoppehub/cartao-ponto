@@ -5,8 +5,9 @@
 (function () {
     'use strict';
 
-    var LOTE = 4000;          /* linhas processadas por ciclo */
-    var POR_PAGINA = 200;     /* linhas por pagina nas tabelas */
+    var LOTE = 4000;             /* linhas processadas por ciclo */
+    var POR_PAGINA = 200;        /* linhas por pagina nas tabelas */
+    var POR_PAGINA_CARTOES = 12; /* trabalhadores por pagina na visao em cartoes */
 
     var estado = {
         resultado: null,
@@ -16,6 +17,7 @@
         pagina: {},
         ordem: {},
         mascarar: false,
+        visaoEspelho: 'cartoes',
         nomeArquivo: '',
         codificacao: '',
         tamanhoArquivo: 0,
@@ -339,6 +341,15 @@
                 }).join('') + '</select></div>');
         }
 
+        if (opcoes.visao) {
+            partes.push('<div class="campo"><label>Exibição</label><div class="segmentado">' +
+                '<button class="btn-seg' + (estado.visaoEspelho === 'cartoes' ? ' ativo' : '') + '" data-visao="cartoes">' +
+                '<i class="fas fa-id-card"></i> Cartões</button>' +
+                '<button class="btn-seg' + (estado.visaoEspelho === 'tabela' ? ' ativo' : '') + '" data-visao="tabela">' +
+                '<i class="fas fa-table-list"></i> Tabela</button>' +
+                '</div></div>');
+        }
+
         partes.push('<div class="filtros-acoes">');
         partes.push('<label class="interruptor"><input type="checkbox" id="fMascarar"' +
             (estado.mascarar ? ' checked' : '') + '> Ocultar documentos</label>');
@@ -367,6 +378,29 @@
      * Tabelas
      * ------------------------------------------------------------------ */
 
+    /* Fatia a lista da aba atual e devolve o rodapé de paginação pronto. */
+    function fatiarPagina(chaveAba, total, porPagina, rotulo) {
+        var pagina = estado.pagina[chaveAba] || 1;
+        var totalPaginas = Math.max(1, Math.ceil(total / porPagina));
+        if (pagina > totalPaginas) { pagina = totalPaginas; estado.pagina[chaveAba] = pagina; }
+        var inicio = (pagina - 1) * porPagina;
+        var fim = Math.min(inicio + porPagina, total);
+
+        var html = ['<div class="paginacao"><span>' +
+            numeroBR(inicio + 1) + '–' + numeroBR(fim) + ' de ' + numeroBR(total) + ' ' + rotulo + '</span>'];
+        if (totalPaginas > 1) {
+            html.push('<span class="paginacao-botoes">' +
+                '<button class="btn btn-icone" data-pagina="1"' + (pagina === 1 ? ' disabled' : '') + '><i class="fas fa-angles-left"></i></button>' +
+                '<button class="btn btn-icone" data-pagina="' + (pagina - 1) + '"' + (pagina === 1 ? ' disabled' : '') + '><i class="fas fa-angle-left"></i></button>' +
+                '<span>Página ' + numeroBR(pagina) + ' de ' + numeroBR(totalPaginas) + '</span>' +
+                '<button class="btn btn-icone" data-pagina="' + (pagina + 1) + '"' + (pagina === totalPaginas ? ' disabled' : '') + '><i class="fas fa-angle-right"></i></button>' +
+                '<button class="btn btn-icone" data-pagina="' + totalPaginas + '"' + (pagina === totalPaginas ? ' disabled' : '') + '><i class="fas fa-angles-right"></i></button>' +
+                '</span>');
+        }
+        html.push('</div>');
+        return { inicio: inicio, fim: fim, html: html.join('') };
+    }
+
     function ordenar(chaveAba, linhas, colunas) {
         var ord = estado.ordem[chaveAba];
         if (!ord) { return linhas; }
@@ -391,11 +425,8 @@
         }
 
         var ordenadas = ordenar(chaveAba, linhas, colunas);
-        var pagina = estado.pagina[chaveAba] || 1;
-        var totalPaginas = Math.max(1, Math.ceil(ordenadas.length / POR_PAGINA));
-        if (pagina > totalPaginas) { pagina = totalPaginas; estado.pagina[chaveAba] = pagina; }
-        var inicio = (pagina - 1) * POR_PAGINA;
-        var visiveis = ordenadas.slice(inicio, inicio + POR_PAGINA);
+        var fatia = fatiarPagina(chaveAba, ordenadas.length, POR_PAGINA, 'registro(s)');
+        var visiveis = ordenadas.slice(fatia.inicio, fatia.fim);
         var ord = estado.ordem[chaveAba];
 
         var html = ['<div class="rolagem"><table><thead><tr>'];
@@ -421,19 +452,7 @@
         });
         html.push('</tbody></table></div>');
 
-        html.push('<div class="paginacao"><span>' +
-            numeroBR(inicio + 1) + '–' + numeroBR(Math.min(inicio + POR_PAGINA, ordenadas.length)) +
-            ' de ' + numeroBR(ordenadas.length) + ' registro(s)</span>');
-        if (totalPaginas > 1) {
-            html.push('<span class="paginacao-botoes">' +
-                '<button class="btn btn-icone" data-pagina="1"' + (pagina === 1 ? ' disabled' : '') + '><i class="fas fa-angles-left"></i></button>' +
-                '<button class="btn btn-icone" data-pagina="' + (pagina - 1) + '"' + (pagina === 1 ? ' disabled' : '') + '><i class="fas fa-angle-left"></i></button>' +
-                '<span>Página ' + numeroBR(pagina) + ' de ' + numeroBR(totalPaginas) + '</span>' +
-                '<button class="btn btn-icone" data-pagina="' + (pagina + 1) + '"' + (pagina === totalPaginas ? ' disabled' : '') + '><i class="fas fa-angle-right"></i></button>' +
-                '<button class="btn btn-icone" data-pagina="' + totalPaginas + '"' + (pagina === totalPaginas ? ' disabled' : '') + '><i class="fas fa-angles-right"></i></button>' +
-                '</span>');
-        }
-        html.push('</div>');
+        html.push(fatia.html);
         return html.join('');
     }
 
@@ -511,7 +530,7 @@
         switch (estado.aba) {
         case 'resumo': html = abaResumo(); break;
         case 'marcacoes': html = barraFiltros({ datas: true, pessoas: true, tipos: true }) + '<div id="areaTabela"></div>'; break;
-        case 'espelho': html = barraFiltros({ datas: true, pessoas: true }) + '<div id="areaTabela"></div>'; break;
+        case 'espelho': html = barraFiltros({ datas: true, pessoas: true, visao: true }) + '<div id="areaTabela"></div>'; break;
         case 'pessoas': html = barraFiltros({ placeholder: 'Nome ou documento...' }) + '<div id="areaTabela"></div>'; break;
         case 'empresa': html = abaEmpresa(); break;
         case 'eventos': html = barraFiltros({ datas: true, exportar: true }) + '<div id="areaTabela"></div>'; break;
@@ -527,7 +546,7 @@
         if (!area) { return; }
         switch (estado.aba) {
         case 'marcacoes': area.innerHTML = tabelaMarcacoes(); break;
-        case 'espelho': area.innerHTML = tabelaEspelho(); break;
+        case 'espelho': area.innerHTML = estado.visaoEspelho === 'tabela' ? tabelaEspelho() : cartoesEspelho(); break;
         case 'pessoas': area.innerHTML = tabelaPessoas(); break;
         case 'eventos': area.innerHTML = tabelaEventos(); break;
         case 'auditoria': area.innerHTML = tabelaAuditoria(); break;
@@ -678,6 +697,80 @@
             if (!dentroDoPeriodo(e.data)) { return false; }
             return filtroTexto([e.nome, e.identificador, e.data]);
         });
+    }
+
+    /*
+     * Visão em cartões: um cartão por documento, uma faixa por data e as
+     * batidas do dia como fichas logo abaixo.
+     */
+    function cartoesEspelho() {
+        var linhas = espelhoFiltrado();
+        if (!linhas.length) {
+            return '<div class="vazio"><i class="fas fa-inbox"></i>' +
+                'Nenhum dia de marcação para os filtros aplicados.</div>';
+        }
+
+        var ordem = [];
+        var grupos = {};
+        linhas.forEach(function (l) {
+            if (!grupos[l.chave]) {
+                grupos[l.chave] = {
+                    identificador: l.identificador,
+                    tipo: l.tipoIdentificador,
+                    nome: l.nome,
+                    dias: [],
+                    marcacoes: 0,
+                    minutos: 0
+                };
+                ordem.push(l.chave);
+            }
+            var g = grupos[l.chave];
+            g.dias.push(l);
+            g.marcacoes += l.quantidade;
+            g.minutos += l.totalMinutos;
+        });
+
+        var fatia = fatiarPagina('espelho', ordem.length, POR_PAGINA_CARTOES, 'trabalhador(es)');
+        var html = ['<div class="cartoes-doc">'];
+
+        ordem.slice(fatia.inicio, fatia.fim).forEach(function (chave) {
+            var g = grupos[chave];
+            g.dias.sort(function (a, b) { return a.data < b.data ? -1 : (a.data > b.data ? 1 : 0); });
+
+            html.push('<section class="cartao-doc">');
+            html.push('<header class="doc-topo">' +
+                '<i class="fas fa-file-lines" style="color:var(--doc-cor)"></i>' +
+                '<span class="rotulo-doc">' + esc(g.tipo || 'Documento') + '</span>' +
+                '<span class="numero-doc">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
+                (g.nome ? '<span class="nome-doc">' + esc(g.nome) + '</span>' : '') +
+                '<span class="resumo-doc">' + numeroBR(g.dias.length) + ' dia(s) · ' +
+                numeroBR(g.marcacoes) + ' marcação(ões) · ' + esc(AFD.formatarMinutos(g.minutos)) + ' no total</span>' +
+                '</header>');
+
+            g.dias.forEach(function (d) {
+                html.push('<div class="dia-faixa">' +
+                    '<i class="fas fa-calendar-days"></i>' +
+                    '<span>' + esc(AFD.formatarDataBR(d.data)) + '</span>' +
+                    '<span class="dia-semana">' + esc(d.diaSemana) + '</span>' +
+                    (d.impar ? '<span class="etiqueta alerta">marcação ímpar</span>' : '') +
+                    '<span class="dia-total">' + numeroBR(d.quantidade) + ' marcação(ões) · ' +
+                    esc(d.total) + ' trabalhada(s)</span>' +
+                    '</div>');
+
+                html.push('<div class="dia-horas">' + d.horarios.map(function (h, i) {
+                    var semPar = d.impar && i === d.horarios.length - 1;
+                    var nsr = d.nsrs && d.nsrs[i] ? d.nsrs[i] : '';
+                    return '<span class="ficha-hora' + (semPar ? ' sem-par' : '') + '"' +
+                        (nsr ? ' title="NSR ' + esc(nsr) + (semPar ? ' — sem par no dia' : '') + '"' : '') + '>' +
+                        '<i class="fas fa-clock"></i>' + esc(h.slice(0, 5)) + '</span>';
+                }).join('') + '</div>');
+            });
+            html.push('</section>');
+        });
+
+        html.push('</div>');
+        html.push(fatia.html);
+        return html.join('');
     }
 
     function tabelaEspelho() {
@@ -1281,6 +1374,15 @@
                 return;
             }
 
+            var visao = e.target.closest('[data-visao]');
+            if (visao) {
+                estado.visaoEspelho = visao.getAttribute('data-visao');
+                try { localStorage.setItem('leitor-afd-visao', estado.visaoEspelho); } catch (err) { /* modo privado */ }
+                estado.pagina.espelho = 1;
+                desenharConteudo();
+                return;
+            }
+
             if (e.target.closest('#btnCsv')) { baixarCSV(); return; }
             var copiar = e.target.closest('#btnCopiar');
             if (copiar) { copiarTabela(copiar); }
@@ -1296,6 +1398,11 @@
     }
 
     /* ------------------------------------------------------------------ */
+
+    try {
+        var visaoSalva = localStorage.getItem('leitor-afd-visao');
+        if (visaoSalva === 'tabela' || visaoSalva === 'cartoes') { estado.visaoEspelho = visaoSalva; }
+    } catch (e) { /* modo privado */ }
 
     iniciarTema();
     ligarEventos();

@@ -37,6 +37,11 @@
     --ok-fundo: #dcfce7;
     --barra: #2563eb;
     --grade: #e5e7eb;
+    --doc-cor: #0e7490;
+    --faixa-bg: #f1f5f9;
+    --chip-bg: #f5f3ff;
+    --chip-borda: #8b5cf6;
+    --chip-texto: #4c1d95;
 }
 
 /* Tokens escuros em tres estados: escolha explicita do visitante,
@@ -81,6 +86,11 @@
     --ok-fundo: #052e16;
     --barra: #4c93f8;
     --grade: #334155;
+    --doc-cor: #22d3ee;
+    --faixa-bg: #172033;
+    --chip-bg: #2e1065;
+    --chip-borda: #7c3aed;
+    --chip-texto: #ede9fe;
 }
 
 * { box-sizing: border-box; }
@@ -366,6 +376,88 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .paginacao-botoes { display: flex; gap: 6px; align-items: center; }
 
+/* --- alternador de exibição --- */
+.segmentado { display: inline-flex; border: 1px solid var(--border-color); border-radius: 7px; overflow: hidden; }
+.btn-seg {
+    padding: 7px 13px;
+    border: none;
+    background: var(--bg-color);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-seg + .btn-seg { border-left: 1px solid var(--border-color); }
+.btn-seg:hover { color: var(--text-color); }
+.btn-seg.ativo { background: var(--primary-color); color: #fff; }
+
+/* --- cartões por documento --- */
+.cartoes-doc { display: flex; flex-direction: column; gap: 18px; }
+
+.cartao-doc {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card-bg);
+}
+
+.doc-topo {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+.doc-topo .rotulo-doc { color: var(--text-muted); font-size: 0.8rem; }
+.doc-topo .numero-doc {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--doc-cor);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+}
+.doc-topo .nome-doc { font-size: 0.9rem; font-weight: 600; }
+.doc-topo .resumo-doc { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); }
+
+.dia-faixa {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 9px 16px;
+    background: var(--faixa-bg);
+    border-top: 1px solid var(--border-color);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.dia-faixa .dia-semana { font-weight: 400; color: var(--text-muted); font-size: 0.82rem; }
+.dia-faixa .dia-total { margin-left: auto; font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+
+.dia-horas { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
+
+.ficha-hora {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 9px;
+    border: 1px solid var(--chip-borda);
+    background: var(--chip-bg);
+    color: var(--chip-texto);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .04em;
+}
+.ficha-hora i { opacity: .75; font-size: 0.85em; }
+.ficha-hora.sem-par { border-style: dashed; }
+
 .vazio { text-align: center; padding: 34px 16px; color: var(--text-muted); }
 .vazio i { font-size: 1.8rem; display: block; margin-bottom: 8px; opacity: .5; }
 
@@ -438,6 +530,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
     body { padding: 0; background: #fff; color: #000; }
     .topo-acoes, .zona, .filtros-acoes, .abas, .paginacao, .btn { display: none !important; }
     .painel-conteudo, .cartao, .bloco { border-color: #ccc; }
+    .cartao-doc { break-inside: avoid; page-break-inside: avoid; }
 }
 </style>
 </head>

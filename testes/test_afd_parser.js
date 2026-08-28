@@ -193,6 +193,15 @@ igual(diaAna.total, '08:08', 'total trabalhado no dia (07:58-12:04 e 13:03-17:05
 igual(diaAna.pares[0].minutos, 246, 'minutos do primeiro par');
 igual(AFD.formatarMinutos(492), '08:12', 'formatacao de minutos');
 
+/* a visao em cartoes mostra o NSR de cada ficha: horario e NSR nao podem desencontrar */
+var nsrBatem = espelho.every(function (dia) {
+    return dia.horarios.every(function (hora, i) {
+        var m = r1510.marcacoes.filter(function (x) { return x.nsr === dia.nsrs[i]; })[0];
+        return m && m.hora === hora && m.data === dia.data && m.chave === dia.chave;
+    });
+});
+ok(nsrBatem, 'cada horario do espelho aponta para o NSR da propria marcacao');
+
 var impar = AFD.montarEspelho([
     { chave: '1', identificador: '11144477735', data: '2026-08-03', hora: '08:00:00', tipoIdentificador: 'CPF' },
     { chave: '1', identificador: '11144477735', data: '2026-08-03', hora: '12:00:00', tipoIdentificador: 'CPF' },

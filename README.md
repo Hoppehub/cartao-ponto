@@ -12,12 +12,16 @@ o que importa quando o AFD carrega CPF, PIS e a jornada de pessoas reais.
 |---|---|
 | **Resumo** | Empregador, REP, período declarado x período com marcações, contagem por tipo de registro, gráfico de marcações por dia e placar da auditoria |
 | **Marcações** | Todas as batidas (tipos 3, 7 e 8) com NSR, data, dia da semana, hora, documento, nome, CRC-16/hash |
-| **Espelho de ponto** | Batidas agrupadas por trabalhador e dia, pareadas entrada/saída, com total trabalhado e aviso de marcação ímpar |
+| **Espelho de ponto** | Batidas agrupadas por trabalhador e dia, em **cartões** (documento em destaque, uma faixa por data e as batidas do dia como fichas) ou em **tabela**; nos dois casos com total trabalhado e aviso de marcação ímpar |
 | **Trabalhadores** | Quem aparece no arquivo, com ou sem cadastro (tipo 5), quantidade de marcações e primeira/última batida |
 | **Empregador e REP** | Cabeçalho detalhado e registros tipo 2 (inclusão/alteração de empregador) |
 | **Relógio e eventos** | Ajustes do relógio (tipo 4) e eventos sensíveis do REP (tipo 6) |
 | **Inconsistências** | Apontamentos de auditoria classificados em erro, alerta e observação |
 | **Arquivo bruto** | Linha a linha, com inspetor que abre cada registro campo a campo e mostra as posições |
+
+No espelho, o botão **Exibição** alterna entre cartões e tabela, e a escolha fica guardada no navegador
+para a próxima visita. Cada ficha de horário mostra o NSR do registro ao passar o cursor, e a última ficha
+de um dia com número ímpar de batidas aparece com contorno tracejado.
 
 Além disso: busca e filtros (período, trabalhador, tipo de registro, gravidade), ordenação por coluna,
 exportação em CSV (separador `;`, com BOM, abre direto no Excel pt-BR), cópia para a área de transferência,

@@ -1132,17 +1132,23 @@
                     nome: p.nome || '',
                     data: m.data,
                     diaSemana: diaDaSemana(m.data),
+                    entradas: [],
                     horarios: [],
                     nsrs: []
                 };
             }
-            grupos[k].horarios.push(m.hora || '');
-            grupos[k].nsrs.push(m.nsr);
+            grupos[k].entradas.push({ hora: m.hora || '', nsr: m.nsr, tipo: m.tipo });
         });
 
         var linhas = Object.keys(grupos).map(function (k) {
             var g = grupos[k];
-            g.horarios.sort();
+            /* ordena mantendo o NSR colado no seu horario */
+            g.entradas.sort(function (a, b) {
+                if (a.hora === b.hora) { return a.nsr < b.nsr ? -1 : (a.nsr > b.nsr ? 1 : 0); }
+                return a.hora < b.hora ? -1 : 1;
+            });
+            g.horarios = g.entradas.map(function (e) { return e.hora; });
+            g.nsrs = g.entradas.map(function (e) { return e.nsr; });
             g.pares = [];
             g.totalMinutos = 0;
             for (var i = 0; i + 1 < g.horarios.length; i += 2) {
