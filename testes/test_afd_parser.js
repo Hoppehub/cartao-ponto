@@ -211,6 +211,59 @@ igual(impar[0].impar, true, 'dia com numero impar de marcacoes e sinalizado');
 igual(impar[0].total, '04:00', 'total considera apenas os pares completos');
 
 /* ------------------------------------------------------------------ */
+grupo('Saldo de horas');
+
+igual(AFD.formatarSaldo(64), '+01:04', 'saldo positivo');
+igual(AFD.formatarSaldo(-32), '-00:32', 'saldo negativo');
+igual(AFD.formatarSaldo(0), '00:00', 'saldo zerado sai sem sinal');
+
+/* o dia do exemplo: 05:00 12:18 ... 09:04 trabalhadas contra 08:00 de jornada */
+var diaExemplo = {
+    chave: '1', identificador: '11144477735', data: '2026-08-24',
+    horarios: ['05:00:00', '09:18:00', '09:46:00', '14:32:00'], totalMinutos: 544
+};
+var saldoExemplo = AFD.calcularSaldos([diaExemplo]);
+igual(diaExemplo.jornadaEsperada, 480, 'jornada padrao de 8 horas');
+igual(AFD.formatarSaldo(diaExemplo.saldo), '+01:04', 'saldo do dia de 09:04 trabalhadas');
+igual(AFD.formatarSaldo(saldoExemplo.total.saldo), '+01:04', 'total acompanha o unico dia');
+
+igual(AFD.inicioDaSemana('2026-08-24'), '2026-08-24', 'segunda-feira e o inicio da propria semana');
+igual(AFD.inicioDaSemana('2026-08-30'), '2026-08-24', 'domingo pertence a semana que comecou na segunda');
+igual(AFD.fimDaSemana('2026-08-24'), '2026-08-30', 'semana termina no domingo');
+igual(AFD.nomeDoMes('2026-08-24'), 'Agosto/2026', 'rotulo do mes');
+ok(AFD.ehFimDeSemana('2026-08-29') && !AFD.ehFimDeSemana('2026-08-28'), 'sabado e fim de semana, sexta nao');
+
+/* jornada menor que a esperada gera saldo negativo */
+var diaCurto = { chave: '1', data: '2026-08-25', horarios: ['08:00:00', '12:00:00'], totalMinutos: 240 };
+AFD.calcularSaldos([diaCurto]);
+igual(AFD.formatarSaldo(diaCurto.saldo), '-04:00', 'dia mais curto que a jornada');
+
+/* jornada configuravel */
+var dia6h = { chave: '1', data: '2026-08-26', horarios: ['08:00:00', '14:00:00'], totalMinutos: 360 };
+AFD.calcularSaldos([dia6h], { jornadaMinutos: 360 });
+igual(AFD.formatarSaldo(dia6h.saldo), '00:00', 'jornada de 6 horas zera o saldo de um dia de 6 horas');
+
+/* acumulados por semana, mes e pessoa */
+var saldosEspelho = AFD.calcularSaldos(AFD.montarEspelho(r1510.marcacoes, r1510.pessoas));
+var pessoaAna = saldosEspelho.pessoas[AFD.chavePessoa(ana.identificador)];
+igual(pessoaAna.dias, 5, 'ANA PAULA com 5 dias no acumulado');
+igual(pessoaAna.esperado, 5 * 480, 'jornada esperada de 5 dias');
+igual(pessoaAna.saldo, pessoaAna.minutos - pessoaAna.esperado, 'saldo da pessoa fecha com trabalhado menos esperado');
+igual(Object.keys(pessoaAna.semanas).length, 1, 'os 5 dias caem na mesma semana');
+igual(pessoaAna.semanas['2026-08-03'].saldo, pessoaAna.saldo, 'saldo da semana igual ao da pessoa no periodo');
+igual(pessoaAna.meses['2026-08'].rotulo, 'Agosto/2026', 'balde do mes rotulado');
+
+var somaDasPessoas = Object.keys(saldosEspelho.pessoas).reduce(function (t, k) {
+    return t + saldosEspelho.pessoas[k].saldo;
+}, 0);
+igual(somaDasPessoas, saldosEspelho.total.saldo, 'total geral e a soma dos trabalhadores');
+
+/* fim de semana pode contar como saldo integral */
+var sabado = { chave: '1', data: '2026-08-29', horarios: ['08:00:00', '12:00:00'], totalMinutos: 240 };
+AFD.calcularSaldos([sabado], { apenasDiasUteis: true });
+igual(AFD.formatarSaldo(sabado.saldo), '+04:00', 'sabado vira saldo integral quando a jornada e so de dias uteis');
+
+/* ------------------------------------------------------------------ */
 grupo('Robustez');
 
 var semQuebras = ler('afd_1510_exemplo.txt', 'latin1').replace(/\r?\n/g, '');

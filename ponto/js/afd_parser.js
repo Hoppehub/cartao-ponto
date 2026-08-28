@@ -276,13 +276,55 @@
         return m ? m[3] + '/' + m[2] + '/' + m[1] : (iso || '');
     }
 
+    function formatarSaldo(total) {
+        var t = Math.round(total || 0);
+        if (t === 0) { return '00:00'; }
+        return (t > 0 ? '+' : '-') + formatarMinutos(Math.abs(t));
+    }
+
     var DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    var MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
     function diaDaSemana(iso) {
         var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
         if (!m) { return ''; }
         var d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
         return DIAS_SEMANA[d.getUTCDay()];
+    }
+
+    function dataParaUTC(iso) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+        if (!m) { return null; }
+        return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    }
+
+    function ehFimDeSemana(iso) {
+        var d = dataParaUTC(iso);
+        if (!d) { return false; }
+        var s = d.getUTCDay();
+        return s === 0 || s === 6;
+    }
+
+    /* Segunda-feira da semana da data, usada como chave e rotulo do periodo */
+    function inicioDaSemana(iso) {
+        var d = dataParaUTC(iso);
+        if (!d) { return ''; }
+        var s = d.getUTCDay();
+        d.setUTCDate(d.getUTCDate() - (s === 0 ? 6 : s - 1));
+        return d.toISOString().slice(0, 10);
+    }
+
+    function fimDaSemana(iso) {
+        var d = dataParaUTC(inicioDaSemana(iso));
+        if (!d) { return ''; }
+        d.setUTCDate(d.getUTCDate() + 6);
+        return d.toISOString().slice(0, 10);
+    }
+
+    function nomeDoMes(iso) {
+        var m = /^(\d{4})-(\d{2})/.exec(String(iso || ''));
+        return m ? MESES[Number(m[2]) - 1] + '/' + m[1] : '';
     }
 
     /* ------------------------------------------------------------------ *
@@ -1173,6 +1215,66 @@
         return linhas;
     }
 
+    /*
+     * Saldo de horas: compara o trabalhado no dia com a jornada esperada e
+     * acumula por semana, por mes e por trabalhador.
+     *
+     * Conta apenas os dias que tem marcacao no arquivo: o AFD nao diz quem
+     * faltou, quem estava de folga, de ferias ou de atestado.
+     *
+     * opcoes.jornadaMinutos   jornada diaria esperada (padrao 480 = 08:00)
+     * opcoes.apenasDiasUteis  sabado e domingo passam a contar como saldo
+     *                         integral (jornada esperada zero)
+     */
+    function calcularSaldos(espelho, opcoes) {
+        opcoes = opcoes || {};
+        var jornada = opcoes.jornadaMinutos == null ? 480 : Number(opcoes.jornadaMinutos);
+        var soUteis = !!opcoes.apenasDiasUteis;
+
+        var pessoas = {};
+        var semanas = {};
+        var meses = {};
+        var total = { dias: 0, minutos: 0, esperado: 0, saldo: 0 };
+
+        function acumular(alvo, dia) {
+            alvo.dias += 1;
+            alvo.minutos += dia.totalMinutos;
+            alvo.esperado += dia.jornadaEsperada;
+            alvo.saldo += dia.saldo;
+        }
+
+        function balde(mapa, chave, extra) {
+            if (!mapa[chave]) {
+                mapa[chave] = { chave: chave, dias: 0, minutos: 0, esperado: 0, saldo: 0 };
+                if (extra) { Object.keys(extra).forEach(function (k) { mapa[chave][k] = extra[k]; }); }
+            }
+            return mapa[chave];
+        }
+
+        espelho.forEach(function (dia) {
+            dia.jornadaEsperada = (soUteis && ehFimDeSemana(dia.data)) ? 0 : jornada;
+            dia.saldo = dia.totalMinutos - dia.jornadaEsperada;
+            dia.chaveSemana = inicioDaSemana(dia.data);
+            dia.chaveMes = String(dia.data).slice(0, 7);
+
+            var p = pessoas[dia.chave];
+            if (!p) {
+                p = pessoas[dia.chave] = {
+                    chave: dia.chave, dias: 0, minutos: 0, esperado: 0, saldo: 0,
+                    semanas: {}, meses: {}
+                };
+            }
+            acumular(p, dia);
+            acumular(balde(p.semanas, dia.chaveSemana, { inicio: dia.chaveSemana, fim: fimDaSemana(dia.data) }), dia);
+            acumular(balde(p.meses, dia.chaveMes, { rotulo: nomeDoMes(dia.data) }), dia);
+            acumular(balde(semanas, dia.chaveSemana, { inicio: dia.chaveSemana, fim: fimDaSemana(dia.data) }), dia);
+            acumular(balde(meses, dia.chaveMes, { rotulo: nomeDoMes(dia.data) }), dia);
+            acumular(total, dia);
+        });
+
+        return { pessoas: pessoas, semanas: semanas, meses: meses, total: total };
+    }
+
     /* ------------------------------------------------------------------ *
      * API publica
      * ------------------------------------------------------------------ */
@@ -1187,6 +1289,7 @@
         separarLinhas: separarLinhas,
         detectarLayout: detectarLayout,
         montarEspelho: montarEspelho,
+        calcularSaldos: calcularSaldos,
         validarCPF: validarCPF,
         validarPIS: validarPIS,
         validarCNPJ: validarCNPJ,
@@ -1196,6 +1299,11 @@
         formatarDocumento: formatarDocumento,
         formatarDataBR: formatarDataBR,
         formatarMinutos: formatarMinutos,
+        formatarSaldo: formatarSaldo,
+        inicioDaSemana: inicioDaSemana,
+        fimDaSemana: fimDaSemana,
+        nomeDoMes: nomeDoMes,
+        ehFimDeSemana: ehFimDeSemana,
         minutosDoDia: minutosDoDia,
         diaDaSemana: diaDaSemana,
         mascarar: mascarar,

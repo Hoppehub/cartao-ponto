@@ -12,7 +12,7 @@ o que importa quando o AFD carrega CPF, PIS e a jornada de pessoas reais.
 |---|---|
 | **Resumo** | Empregador, REP, período declarado x período com marcações, contagem por tipo de registro, gráfico de marcações por dia e placar da auditoria |
 | **Marcações** | Todas as batidas (tipos 3, 7 e 8) com NSR, data, dia da semana, hora, documento, nome, CRC-16/hash |
-| **Espelho de ponto** | Batidas agrupadas por trabalhador e dia, em **cartões** (documento em destaque, uma faixa por data e as batidas do dia como fichas) ou em **tabela**; nos dois casos com total trabalhado e aviso de marcação ímpar |
+| **Espelho de ponto** | Batidas agrupadas por trabalhador e dia, em **cartões** (documento em destaque, uma faixa por data e as batidas do dia como fichas) ou em **tabela**; com total trabalhado, **saldo de horas** do dia, fechamento por semana e por mês, e aviso de marcação ímpar |
 | **Trabalhadores** | Quem aparece no arquivo, com ou sem cadastro (tipo 5), quantidade de marcações e primeira/última batida |
 | **Empregador e REP** | Cabeçalho detalhado e registros tipo 2 (inclusão/alteração de empregador) |
 | **Relógio e eventos** | Ajustes do relógio (tipo 4) e eventos sensíveis do REP (tipo 6) |
@@ -26,6 +26,25 @@ cartões, pelo próprio cartão e pelo mesmo traço. Ordenar a tabela por uma co
 (total trabalhado, por exemplo) desfaz as faixas e devolve o zebrado — ordenar por trabalhador ou por
 documento mantém o agrupamento. Cada ficha de horário mostra o NSR do registro ao passar o cursor, e a última ficha
 de um dia com número ímpar de batidas aparece com contorno tracejado.
+
+### Saldo de horas
+
+O saldo compara o trabalhado no dia com a **jornada diária esperada** — 08:00 por padrão, ajustável no
+campo *Jornada diária*. Acima disso o saldo sai positivo (verde), abaixo sai negativo (vermelho). Nos
+cartões, cada dia mostra o próprio saldo ao lado das batidas, e ao fim de cada semana e de cada mês entra
+uma faixa de fechamento com trabalhado, esperado e saldo do período. Na tabela, o saldo é uma coluna, e a
+faixa do trabalhador traz o total do período filtrado. A exportação em CSV leva jornada esperada e saldo.
+
+Duas coisas que o AFD **não** informa e que por isso ficam de fora da conta:
+
+- **Dias sem marcação não entram.** O arquivo não distingue falta, folga, férias, atestado ou feriado, e
+  descontar 08:00 de todo dia sem batida produziria um saldo negativo falso. Só entram os dias que têm
+  marcação.
+- **Sábado, domingo e feriado** contam como dia normal por padrão. Se na sua regra o fim de semana é saldo
+  integral, marque *Jornada só em dias úteis*: sábado e domingo passam a ter jornada esperada zero.
+
+O cálculo pareia as batidas do dia na ordem (1ª com 2ª, 3ª com 4ª...). Não aplica tolerância da
+Portaria 671, intervalo mínimo, adicional noturno nem jornada que vira o dia — é conferência, não folha.
 
 Além disso: busca e filtros (período, trabalhador, tipo de registro, gravidade), ordenação por coluna,
 exportação em CSV (separador `;`, com BOM, abre direto no Excel pt-BR), cópia para a área de transferência,
@@ -181,8 +200,7 @@ registro campo a campo com as posições — dá para conferir e me dizer o que 
 - Leitura de arquivos em ISO‑8859‑1/Windows‑1252 (comum nos REPs antigos) e UTF‑8, com detecção automática.
 - Arquivos exportados sem quebra de linha são reconstituídos no leiaute 1.510 (tamanhos fixos).
 - Arquivos grandes são processados em lotes, com barra de progresso, sem travar a aba do navegador.
-- O total trabalhado do espelho pareia as marcações do dia na ordem (1ª com 2ª, 3ª com 4ª...). É apoio de
-  conferência, não cálculo de jornada: não aplica tolerância, intervalo mínimo, adicional noturno nem
-  jornada que vira o dia.
+- O total trabalhado e o saldo do espelho são apoio de conferência, não cálculo de folha: veja as
+  ressalvas em *Saldo de horas*.
 - Empresa, pessoas e documentos dos exemplos são fictícios; os dígitos verificadores foram calculados
   apenas para os arquivos passarem nas validações.

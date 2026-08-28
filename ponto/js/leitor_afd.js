@@ -18,6 +18,8 @@
         ordem: {},
         mascarar: false,
         visaoEspelho: 'cartoes',
+        jornadaMinutos: 480,
+        apenasDiasUteis: false,
         nomeArquivo: '',
         codificacao: '',
         tamanhoArquivo: 0,
@@ -56,6 +58,31 @@
     function dataHoraBR(data, hora) {
         if (!data) { return ''; }
         return AFD.formatarDataBR(data) + (hora ? ' ' + hora.slice(0, 5) : '');
+    }
+
+    function horaDeMinutos(min) {
+        var t = Math.max(0, Math.round(min || 0));
+        return ('0' + Math.floor(t / 60)).slice(-2) + ':' + ('0' + (t % 60)).slice(-2);
+    }
+
+    function minutosDeHora(texto) {
+        var m = /^(\d{1,2}):(\d{2})/.exec(String(texto || ''));
+        if (!m) { return null; }
+        return Number(m[1]) * 60 + Number(m[2]);
+    }
+
+    function opcoesSaldo() {
+        return { jornadaMinutos: estado.jornadaMinutos, apenasDiasUteis: estado.apenasDiasUteis };
+    }
+
+    function classeSaldo(minutos) {
+        if (minutos > 0) { return 'positivo'; }
+        if (minutos < 0) { return 'negativo'; }
+        return 'neutro';
+    }
+
+    function saldoHTML(minutos) {
+        return '<span class="' + classeSaldo(minutos) + '">' + esc(AFD.formatarSaldo(minutos)) + '</span>';
     }
 
     function debounce(fn, ms) {
@@ -341,6 +368,11 @@
                 }).join('') + '</select></div>');
         }
 
+        if (opcoes.jornada) {
+            partes.push('<div class="campo"><label for="fJornada">Jornada diária</label>' +
+                '<input type="time" id="fJornada" step="60" value="' + esc(horaDeMinutos(estado.jornadaMinutos)) + '"></div>');
+        }
+
         if (opcoes.visao) {
             partes.push('<div class="campo"><label>Exibição</label><div class="segmentado">' +
                 '<button class="btn-seg' + (estado.visaoEspelho === 'cartoes' ? ' ativo' : '') + '" data-visao="cartoes">' +
@@ -351,6 +383,11 @@
         }
 
         partes.push('<div class="filtros-acoes">');
+        if (opcoes.jornada) {
+            partes.push('<label class="interruptor" title="Sábado e domingo passam a contar como saldo integral">' +
+                '<input type="checkbox" id="fDiasUteis"' + (estado.apenasDiasUteis ? ' checked' : '') +
+                '> Jornada só em dias úteis</label>');
+        }
         partes.push('<label class="interruptor"><input type="checkbox" id="fMascarar"' +
             (estado.mascarar ? ' checked' : '') + '> Ocultar documentos</label>');
         if (opcoes.exportar !== false) {
@@ -551,7 +588,7 @@
         switch (estado.aba) {
         case 'resumo': html = abaResumo(); break;
         case 'marcacoes': html = barraFiltros({ datas: true, pessoas: true, tipos: true }) + '<div id="areaTabela"></div>'; break;
-        case 'espelho': html = barraFiltros({ datas: true, pessoas: true, visao: true }) + '<div id="areaTabela"></div>'; break;
+        case 'espelho': html = barraFiltros({ datas: true, pessoas: true, visao: true, jornada: true }) + '<div id="areaTabela"></div>'; break;
         case 'pessoas': html = barraFiltros({ placeholder: 'Nome ou documento...' }) + '<div id="areaTabela"></div>'; break;
         case 'empresa': html = abaEmpresa(); break;
         case 'eventos': html = barraFiltros({ datas: true, exportar: true }) + '<div id="areaTabela"></div>'; break;
@@ -745,8 +782,19 @@
     }
 
     function resumoDoGrupo(g) {
-        return numeroBR(g.dias.length) + ' dia(s) · ' + numeroBR(g.marcacoes) +
-            ' marcação(ões) · ' + AFD.formatarMinutos(g.minutos) + ' no total';
+        return esc(numeroBR(g.dias.length) + ' dia(s) · ' + numeroBR(g.marcacoes) +
+            ' marcação(ões) · ' + AFD.formatarMinutos(g.minutos) + ' trabalhadas');
+    }
+
+    /* faixa de fechamento de semana ou de mês dentro do cartão */
+    function faixaSubtotal(classe, titulo, periodo, balde) {
+        return '<div class="subtotal ' + classe + '">' +
+            '<span class="titulo">' + esc(titulo) + '</span>' +
+            '<span class="periodo">' + esc(periodo) + ' · ' + numeroBR(balde.dias) + ' dia(s) · ' +
+            esc(AFD.formatarMinutos(balde.minutos)) + ' trabalhadas para ' +
+            esc(AFD.formatarMinutos(balde.esperado)) + ' esperadas</span>' +
+            '<span class="valor ' + classeSaldo(balde.saldo) + '">' + esc(AFD.formatarSaldo(balde.saldo)) + '</span>' +
+            '</div>';
     }
 
     /*
@@ -760,6 +808,7 @@
                 'Nenhum dia de marcação para os filtros aplicados.</div>';
         }
 
+        var saldos = AFD.calcularSaldos(linhas, opcoesSaldo());
         var agrupado = agruparPorDocumento(linhas);
         var ordem = agrupado.ordem;
         var grupos = agrupado.grupos;
@@ -777,27 +826,60 @@
                 '<span class="rotulo-doc">' + esc(g.tipo || 'Documento') + '</span>' +
                 '<span class="numero-doc">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
                 (g.nome ? '<span class="nome-doc">' + esc(g.nome) + '</span>' : '') +
-                '<span class="resumo-doc">' + esc(resumoDoGrupo(g)) + '</span>' +
+                '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · saldo ' +
+                saldoHTML(saldos.pessoas[chave].saldo) + '</span>' +
                 '</header>');
 
+            var pessoa = saldos.pessoas[chave];
+            var semanaAberta = null;
+            var mesAberto = null;
+
+            function fecharSemana() {
+                if (!semanaAberta) { return; }
+                var b = pessoa.semanas[semanaAberta];
+                html.push(faixaSubtotal('semana', 'Saldo da semana',
+                    AFD.formatarDataBR(b.inicio) + ' a ' + AFD.formatarDataBR(b.fim), b));
+                semanaAberta = null;
+            }
+
+            function fecharMes() {
+                if (!mesAberto) { return; }
+                var b = pessoa.meses[mesAberto];
+                html.push(faixaSubtotal('mes', 'Saldo do mês', b.rotulo, b));
+                mesAberto = null;
+            }
+
             g.dias.forEach(function (d) {
+                if (semanaAberta && d.chaveSemana !== semanaAberta) { fecharSemana(); }
+                if (mesAberto && d.chaveMes !== mesAberto) { fecharMes(); }
+                semanaAberta = d.chaveSemana;
+                mesAberto = d.chaveMes;
+
                 html.push('<div class="dia-faixa">' +
                     '<i class="fas fa-calendar-days"></i>' +
                     '<span>' + esc(AFD.formatarDataBR(d.data)) + '</span>' +
                     '<span class="dia-semana">' + esc(d.diaSemana) + '</span>' +
                     (d.impar ? '<span class="etiqueta alerta">marcação ímpar</span>' : '') +
                     '<span class="dia-total">' + numeroBR(d.quantidade) + ' marcação(ões) · ' +
-                    esc(d.total) + ' trabalhada(s)</span>' +
+                    esc(d.total) + ' trabalhada(s) para ' + esc(AFD.formatarMinutos(d.jornadaEsperada)) +
+                    ' esperada(s)</span>' +
                     '</div>');
 
-                html.push('<div class="dia-horas">' + d.horarios.map(function (h, i) {
-                    var semPar = d.impar && i === d.horarios.length - 1;
-                    var nsr = d.nsrs && d.nsrs[i] ? d.nsrs[i] : '';
-                    return '<span class="ficha-hora' + (semPar ? ' sem-par' : '') + '"' +
-                        (nsr ? ' title="NSR ' + esc(nsr) + (semPar ? ' — sem par no dia' : '') + '"' : '') + '>' +
-                        '<i class="fas fa-clock"></i>' + esc(h.slice(0, 5)) + '</span>';
-                }).join('') + '</div>');
+                html.push('<div class="dia-horas">' +
+                    '<div class="fichas">' + d.horarios.map(function (h, i) {
+                        var semPar = d.impar && i === d.horarios.length - 1;
+                        var nsr = d.nsrs && d.nsrs[i] ? d.nsrs[i] : '';
+                        return '<span class="ficha-hora' + (semPar ? ' sem-par' : '') + '"' +
+                            (nsr ? ' title="NSR ' + esc(nsr) + (semPar ? ' — sem par no dia' : '') + '"' : '') + '>' +
+                            '<i class="fas fa-clock"></i>' + esc(h.slice(0, 5)) + '</span>';
+                    }).join('') + '</div>' +
+                    '<div class="saldo-dia"><span class="rotulo">Saldo de horas</span>' +
+                    '<span class="valor ' + classeSaldo(d.saldo) + '">' + esc(AFD.formatarSaldo(d.saldo)) + '</span>' +
+                    '</div></div>');
             });
+
+            fecharSemana();
+            fecharMes();
             html.push('</section>');
         });
 
@@ -808,6 +890,7 @@
 
     function tabelaEspelho() {
         var linhas = espelhoFiltrado();
+        var saldos = AFD.calcularSaldos(linhas, opcoesSaldo());
         var grupos = agruparPorDocumento(linhas).grupos;
 
         var colunas = [
@@ -820,6 +903,7 @@
             } },
             { titulo: 'Qtde.', classe: 'num', valor: function (e) { return e.quantidade; }, celula: function (e) { return numeroBR(e.quantidade); } },
             { titulo: 'Total trabalhado', classe: 'num mono', valor: function (e) { return e.totalMinutos; }, celula: function (e) { return esc(e.total); } },
+            { titulo: 'Saldo', classe: 'num mono', valor: function (e) { return e.saldo; }, celula: function (e) { return saldoHTML(e.saldo); } },
             { titulo: 'Situação', celula: function (e) {
                 return e.impar
                     ? '<span class="etiqueta alerta">marcação ímpar</span>'
@@ -836,7 +920,8 @@
                         '<span class="rotulo-grupo">' + esc(g.tipo || 'Documento') + '</span>' +
                         '<span class="doc-grupo">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
                         '<span class="nome-grupo">' + esc(g.nome || 'sem cadastro no arquivo') + '</span>' +
-                        '<span class="resumo-grupo">' + esc(resumoDoGrupo(g)) + '</span>'
+                        '<span class="resumo-grupo">' + resumoDoGrupo(g) + ' · saldo ' +
+                        saldoHTML(saldos.pessoas[e.chave].saldo) + '</span>'
                 };
             }
         });
@@ -1057,13 +1142,17 @@
                 })
             };
         case 'espelho':
+            var diasEspelho = espelhoFiltrado();
+            AFD.calcularSaldos(diasEspelho, opcoesSaldo());
             return {
                 nome: 'espelho_de_ponto',
-                cabecalho: ['Trabalhador', 'Documento', 'Data', 'Dia da semana', 'Marcacoes', 'Qtde', 'Total trabalhado', 'Situacao'],
-                linhas: espelhoFiltrado().map(function (e) {
+                cabecalho: ['Trabalhador', 'Documento', 'Data', 'Dia da semana', 'Marcacoes', 'Qtde',
+                    'Total trabalhado', 'Jornada esperada', 'Saldo', 'Situacao'],
+                linhas: diasEspelho.map(function (e) {
                     return [e.nome, documento(e.identificador, e.tipoIdentificador), AFD.formatarDataBR(e.data),
                         e.diaSemana, e.horarios.map(function (h) { return h.slice(0, 5); }).join(' '),
-                        e.quantidade, e.total, e.impar ? 'Marcacao impar' : 'Pares completos'];
+                        e.quantidade, e.total, AFD.formatarMinutos(e.jornadaEsperada), AFD.formatarSaldo(e.saldo),
+                        e.impar ? 'Marcacao impar' : 'Pares completos'];
                 })
             };
         case 'pessoas':
@@ -1396,6 +1485,17 @@
             } else if (alvo.id === 'fMascarar') {
                 estado.mascarar = alvo.checked;
                 desenharConteudo();
+            } else if (alvo.id === 'fJornada') {
+                var min = minutosDeHora(alvo.value);
+                if (min !== null) {
+                    estado.jornadaMinutos = min;
+                    try { localStorage.setItem('leitor-afd-jornada', String(min)); } catch (err) { /* modo privado */ }
+                    desenharTabela();
+                }
+            } else if (alvo.id === 'fDiasUteis') {
+                estado.apenasDiasUteis = alvo.checked;
+                try { localStorage.setItem('leitor-afd-dias-uteis', alvo.checked ? '1' : '0'); } catch (err) { /* modo privado */ }
+                desenharTabela();
             }
         });
 
@@ -1449,6 +1549,9 @@
     try {
         var visaoSalva = localStorage.getItem('leitor-afd-visao');
         if (visaoSalva === 'tabela' || visaoSalva === 'cartoes') { estado.visaoEspelho = visaoSalva; }
+        var jornadaSalva = Number(localStorage.getItem('leitor-afd-jornada'));
+        if (jornadaSalva > 0 && jornadaSalva <= 1440) { estado.jornadaMinutos = jornadaSalva; }
+        estado.apenasDiasUteis = localStorage.getItem('leitor-afd-dias-uteis') === '1';
     } catch (e) { /* modo privado */ }
 
     iniciarTema();
