@@ -441,6 +441,36 @@ ok(!!diaComNome, 'o espelho recebe o nome vindo da lista');
 igual(diaComNome.nomeExterno, true, 'a origem do nome fica marcada');
 
 /* ------------------------------------------------------------------ */
+grupo('Leitura enxuta');
+
+/* os campos com posicoes so sao montados quando o inspetor pede */
+var registro3 = r1510.registros.filter(function (r) { return r.tipo === '3'; })[0];
+igual(registro3.campos, undefined, 'registro lido em lote nao carrega a lista de campos');
+
+var camposSobDemanda = AFD.camposDoRegistro(registro3.linha, '1510');
+igual(camposSobDemanda.length, 5, 'camposDoRegistro monta os cinco campos do tipo 3');
+igual(camposSobDemanda[0].nome, 'NSR', 'primeiro campo');
+igual(camposSobDemanda[4].nome, 'PIS', 'ultimo campo do tipo 3');
+igual(camposSobDemanda[4].inicio + '-' + camposSobDemanda[4].fim, '23-34', 'posicoes do PIS no leiaute 1.510');
+
+var campos671 = AFD.camposDoRegistro(r671.registros.filter(function (r) { return r.tipo === '7'; })[0].linha, '671');
+ok(campos671.length >= 5, 'campos do registro REP-P');
+ok(campos671.some(function (c) { return c.nome === 'Hash do registro'; }), 'o hash aparece entre os campos');
+igual(AFD.camposDoRegistro('curta', '671').length, 0, 'linha curta nao quebra o inspetor');
+
+/* a lista de inconsistencias tem teto, mas a contagem continua inteira */
+var muitoQuebrado = ['000000000' + '1' + '1' + '12345678000195' + '000000000000' +
+    new Array(151).join(' ') + new Array(18).join(' ') + '0108202631082026010920260800'];
+for (var q = 1; q <= 60; q++) {
+    muitoQuebrado.push(String(q * 3).padStart(9, '0') + '3' + '31022026' + '0800' + '012065478502');
+}
+var comTeto = AFD.analisar(muitoQuebrado.join('\r\n'), { limiteInconsistencias: 10 });
+igual(comTeto.inconsistencias.filter(function (i) { return i.codigo === 'LISTA_TRUNCADA'; }).length, 1,
+    'a lista avisa que foi truncada');
+ok(comTeto.inconsistencias.length <= 11, 'a lista para no teto pedido');
+ok(comTeto.resumo.niveis.erro > 10, 'o resumo conta todas as ocorrencias, nao so as listadas');
+
+/* ------------------------------------------------------------------ */
 grupo('Robustez');
 
 var semQuebras = ler('afd_1510_exemplo.txt', 'latin1').replace(/\r?\n/g, '');
@@ -469,6 +499,28 @@ for (var i = 0; i < linhas.length; i += 7) { an.processar(linhas.slice(i, i + 7)
 var emLotes = an.finalizar();
 igual(emLotes.resumo.totalMarcacoes, r671.resumo.totalMarcacoes, 'analise em lotes: mesmas marcacoes');
 igual(emLotes.inconsistencias.length, r671.inconsistencias.length, 'analise em lotes: mesmas inconsistencias');
+
+grupo('Chaves vindas do arquivo');
+
+/*
+ * As chaves de pessoa, data e codigo saem do arquivo enviado. Num objeto
+ * comum, "constructor" e "toString" ja respondem como se existissem e a
+ * leitura silenciosamente perde registros.
+ */
+var listaEstranha = AFD.normalizarListaDeNomes({
+    constructor: 'Maria', toString: 'Joao', '12345678901': 'Ana'
+});
+igual(listaEstranha.total, 3, 'nome com chave "constructor" nao e descartado');
+igual(listaEstranha.nomes['constructor'], 'Maria', 'chave herdada nao mascara o nome');
+igual(listaEstranha.nomes['toString'], 'Joao', 'chave "toString" tambem entra');
+
+igual(AFD.diaDaSemana('constructor'), '', 'data ilegivel nao herda nada do prototipo');
+igual(AFD.diaDaSemana('__proto__'), '', 'data "__proto__" nao herda nada');
+igual(AFD.diaDaSemana('2026-08-24'), 'Segunda', 'data boa continua certa depois do cache');
+
+igual(AFD.nomeDoMes('2026-08-24'), 'Agosto/2026', 'rotulo do mes pela data inteira');
+igual(AFD.nomeDoMes('2026-08'), 'Agosto/2026', 'rotulo do mes so com ano-mes');
+igual(AFD.nomeDoMes('xx'), '', 'mes ilegivel devolve vazio');
 
 /* ------------------------------------------------------------------ */
 console.log('\n' + (falhas === 0 ? 'TODOS OS TESTES PASSARAM' : 'FALHAS: ' + falhas) +

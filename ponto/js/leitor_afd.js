@@ -12,6 +12,9 @@
     var estado = {
         resultado: null,
         espelho: [],
+        /* Sobe a cada novo espelho; invalida os caches de nomes e de filtro. */
+        versaoEspelho: 0,
+        _mapaNomes: null,
         registrosPorLinha: {},
         aba: 'resumo',
         modo: 'espelho',
@@ -252,10 +255,11 @@
             }
         });
         estado.resultado.pessoas.sort(function (a, b) {
-            return (a.nome || '\uFFFF').localeCompare(b.nome || '\uFFFF', 'pt-BR');
+            return AFD.compararTexto(a.nome || '\uFFFF', b.nome || '\uFFFF');
         });
         estado._mapaNomes = null;
         estado.espelho = AFD.montarEspelho(estado.resultado.marcacoes, estado.resultado.pessoas);
+        estado.versaoEspelho += 1;
         return casados;
     }
 
@@ -309,8 +313,8 @@
         estado.nomesInfo = estado.nomesPadrao
             ? { total: Object.keys(estado.nomesPadrao).length, casados: 0, origem: 'padrao' }
             : null;
-        aplicarNomes();
-        if (estado.nomesInfo) { estado.nomesInfo.casados = aplicarNomes(); }
+        var casados = aplicarNomes();
+        if (estado.nomesInfo) { estado.nomesInfo.casados = casados; }
         mostrarEstadoNomes();
         if (estado.resultado) {
             desenharCartoes();
@@ -323,6 +327,8 @@
         $('progresso').style.display = 'none';
         estado.resultado = resultado;
         estado.espelho = AFD.montarEspelho(resultado.marcacoes, resultado.pessoas);
+        estado.versaoEspelho += 1;
+        estado._mapaNomes = null;
         if (estado.nomesInfo) {
             estado.nomesInfo.casados = aplicarNomes();
         }
@@ -637,7 +643,7 @@
             if (typeof va === 'number' && typeof vb === 'number') { return ord.desc ? vb - va : va - vb; }
             va = String(va == null ? '' : va);
             vb = String(vb == null ? '' : vb);
-            return ord.desc ? vb.localeCompare(va, 'pt-BR') : va.localeCompare(vb, 'pt-BR');
+            return ord.desc ? AFD.compararTexto(vb, va) : AFD.compararTexto(va, vb);
         });
         return copia;
     }
@@ -891,17 +897,16 @@
         });
     }
 
-    function nomeDe(chave) {
-        var p = estado.resultado.pessoas.filter(function (x) { return x.chave === chave; })[0];
-        return p ? p.nome : '';
-    }
-
     function mapaNomes() {
         if (!estado._mapaNomes) {
-            estado._mapaNomes = {};
+            estado._mapaNomes = Object.create ? Object.create(null) : {};
             estado.resultado.pessoas.forEach(function (p) { estado._mapaNomes[p.chave] = p.nome; });
         }
         return estado._mapaNomes;
+    }
+
+    function nomeDe(chave) {
+        return mapaNomes()[chave] || '';
     }
 
     function tabelaMarcacoes() {
@@ -936,7 +941,25 @@
 
     /* ---------- espelho ---------- */
 
+    /*
+     * Cartoes, tabela e exportacao pedem o mesmo espelho no mesmo render, e
+     * cada tecla na busca dispara outro. Guardar o ultimo resultado evita
+     * refazer filtro, completarDias e ordenacao a cada chamada.
+     */
+    var memoEspelho = { chave: null, valor: null };
+
+    function chaveDoEspelho() {
+        var f = estado.filtros;
+        return [
+            estado.versaoEspelho, f.busca, f.dataIni, f.dataFim, f.pessoa,
+            estado.faltas, estado.escalaTipo, estado.jornadaMinutos,
+            estado.escalaTipo === 'custom' ? estado.escalaCustom.join(',') : ''
+        ].join('|');
+    }
+
     function espelhoFiltrado() {
+        var chave = chaveDoEspelho();
+        if (memoEspelho.chave === chave) { return memoEspelho.valor; }
         var f = estado.filtros;
         var base = estado.espelho.filter(function (e) {
             if (f.pessoa && e.chave !== f.pessoa) { return false; }
@@ -953,7 +976,9 @@
             });
         }
 
-        return base.filter(function (e) { return dentroDoPeriodo(e.data); });
+        var visiveis = base.filter(function (e) { return dentroDoPeriodo(e.data); });
+        memoEspelho = { chave: chave, valor: visiveis };
+        return visiveis;
     }
 
     /* Junta os dias por documento; serve à visão em cartões e às faixas da tabela. */
@@ -1353,7 +1378,7 @@
         var r = estado.registrosPorLinha[numeroLinha];
         if (!r) { return; }
 
-        var campos = (r.campos || []).map(function (c) {
+        var campos = AFD.camposDoRegistro(r.linha, estado.resultado.layout).map(function (c) {
             return '<tr><td>' + esc(c.nome) + '</td>' +
                 '<td class="mono num">' + c.inicio + '–' + c.fim + '</td>' +
                 '<td class="mono">' + (esc(c.valor) || '<span style="opacity:.5">(vazio)</span>') + '</td></tr>';

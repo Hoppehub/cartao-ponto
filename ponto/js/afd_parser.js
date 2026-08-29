@@ -56,6 +56,25 @@
      * Utilitarios de texto
      * ------------------------------------------------------------------ */
 
+    /* Um colator so: String.localeCompare monta um a cada chamada, o que pesa
+       nas ordenacoes de dezenas de milhares de linhas. */
+    var COLATOR = (typeof Intl !== 'undefined' && Intl.Collator)
+        ? new Intl.Collator('pt-BR')
+        : { compare: function (a, b) { return a < b ? -1 : (a > b ? 1 : 0); } };
+
+    function compararTexto(a, b) {
+        return COLATOR.compare(a, b);
+    }
+
+    /*
+     * Mapa sem prototipo. As chaves abaixo (PIS, CPF, datas, codigos) vem do
+     * arquivo enviado; num objeto comum, uma chave como "constructor" ou
+     * "toString" ja responderia como se existisse e a leitura quebraria.
+     */
+    function mapaVazio() {
+        return Object.create ? Object.create(null) : {};
+    }
+
     function apenasDigitos(v) {
         return String(v == null ? '' : v).replace(/\D+/g, '');
     }
@@ -64,8 +83,12 @@
         return String(v == null ? '' : v).replace(/\s+$/, '').replace(/^\s+/, '');
     }
 
+    var RE_SO_DIGITOS = /^[0-9]+$/;
+    var RE_SO_ESPACO = /^\s*$/;
+    var RE_NSR = /^[0-9]{9}/;
+
     function ehSoDigitos(v) {
-        return /^[0-9]+$/.test(String(v == null ? '' : v));
+        return RE_SO_DIGITOS.test(String(v == null ? '' : v));
     }
 
     function pad(n, tam) {
@@ -276,21 +299,18 @@
         return m ? m[3] + '/' + m[2] + '/' + m[1] : (iso || '');
     }
 
+    var DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    var MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
     function formatarSaldo(total) {
         var t = Math.round(total || 0);
         if (t === 0) { return '00:00'; }
         return (t > 0 ? '+' : '-') + formatarMinutos(Math.abs(t));
     }
 
-    var DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    var MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
     function diaDaSemana(iso) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
-        if (!m) { return ''; }
-        var d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-        return DIAS_SEMANA[d.getUTCDay()];
+        return infoData(iso).diaSemana;
     }
 
     function dataParaUTC(iso) {
@@ -299,32 +319,64 @@
         return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
     }
 
-    function ehFimDeSemana(iso) {
+    /*
+     * Cada data do periodo se repete uma vez por trabalhador, entao o dia da
+     * semana, a semana e o mes sao calculados uma vez e reaproveitados.
+     */
+    var CACHE_DATA = mapaVazio();
+
+    /* Data ilegivel nao entra no cache: um arquivo corrompido traria milhares
+       de textos diferentes e todos cabem nesta mesma resposta. */
+    var DATA_INVALIDA = {
+        valida: false, dow: -1, diaSemana: '',
+        semana: '', fimSemana: '', mes: '', rotuloMes: ''
+    };
+    if (Object.freeze) { Object.freeze(DATA_INVALIDA); }
+
+    function infoData(iso) {
+        var pronta = CACHE_DATA[iso];
+        if (pronta) { return pronta; }
         var d = dataParaUTC(iso);
-        if (!d) { return false; }
-        var s = d.getUTCDay();
-        return s === 0 || s === 6;
+        if (!d) {
+            return DATA_INVALIDA;
+        } else {
+            var dow = d.getUTCDay();
+            var seg = new Date(d.getTime());
+            seg.setUTCDate(seg.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+            var dom = new Date(seg.getTime());
+            dom.setUTCDate(dom.getUTCDate() + 6);
+            pronta = {
+                valida: true,
+                dow: dow,
+                diaSemana: DIAS_SEMANA[dow],
+                semana: seg.toISOString().slice(0, 10),
+                fimSemana: dom.toISOString().slice(0, 10),
+                mes: iso.slice(0, 7),
+                rotuloMes: MESES[d.getUTCMonth()] + '/' + d.getUTCFullYear()
+            };
+        }
+        CACHE_DATA[iso] = pronta;
+        return pronta;
+    }
+
+    function ehFimDeSemana(iso) {
+        var dow = infoData(iso).dow;
+        return dow === 0 || dow === 6;
     }
 
     /* Segunda-feira da semana da data, usada como chave e rotulo do periodo */
     function inicioDaSemana(iso) {
-        var d = dataParaUTC(iso);
-        if (!d) { return ''; }
-        var s = d.getUTCDay();
-        d.setUTCDate(d.getUTCDate() - (s === 0 ? 6 : s - 1));
-        return d.toISOString().slice(0, 10);
+        return infoData(iso).semana;
     }
 
     function fimDaSemana(iso) {
-        var d = dataParaUTC(inicioDaSemana(iso));
-        if (!d) { return ''; }
-        d.setUTCDate(d.getUTCDate() + 6);
-        return d.toISOString().slice(0, 10);
+        return infoData(iso).fimSemana;
     }
 
+    /* Aceita tanto a data inteira quanto so o mes ("2026-08"). */
     function nomeDoMes(iso) {
-        var m = /^(\d{4})-(\d{2})/.exec(String(iso || ''));
-        return m ? MESES[Number(m[2]) - 1] + '/' + m[1] : '';
+        var t = String(iso || '');
+        return infoData(t.length === 7 ? t + '-01' : t).rotuloMes;
     }
 
     /* ------------------------------------------------------------------ *
@@ -444,18 +496,24 @@
      * Registros - Portaria 1.510/2009
      * ------------------------------------------------------------------ */
 
-    function lerRegistro1510(linha) {
+    /*
+     * comCampos monta a lista de campos com as posicoes, usada pelo inspetor
+     * de registro. Na leitura de um arquivo inteiro ela fica de fora: seriam
+     * uma dezena de objetos por linha, so para quase nunca serem abertos.
+     */
+    function lerRegistro1510(linha, comCampos) {
         var r = {
             nsr: linha.slice(0, 9),
             nsrNumero: Number(linha.slice(0, 9)),
             tipo: linha.charAt(9),
             tamanho: linha.length,
-            linha: linha,
-            campos: []
+            linha: linha
         };
         var d, h, d2, h2;
+        if (comCampos) { r.campos = []; }
 
         function campo(nome, valor, ini, tam) {
+            if (!comCampos) { return; }
             r.campos.push({ nome: nome, valor: valor, inicio: ini, fim: ini + tam - 1 });
         }
 
@@ -562,24 +620,27 @@
      * Registros - Portaria 671/2021
      * ------------------------------------------------------------------ */
 
-    function lerRegistro671(linha) {
+    function lerRegistro671(linha, comCampos) {
         var r = {
             nsr: linha.slice(0, 9),
             nsrNumero: Number(linha.slice(0, 9)),
             tipo: linha.charAt(9),
             tamanho: linha.length,
-            linha: linha,
-            campos: []
+            linha: linha
         };
         var resto = linha.slice(10);
         var pos = 0, dh, id, dt, cauda, mh;
+        if (comCampos) { r.campos = []; }
 
         function campo(nome, valor, iniResto, tam) {
+            if (!comCampos) { return; }
             r.campos.push({ nome: nome, valor: valor, inicio: 11 + iniResto, fim: 11 + iniResto + Math.max(tam, 1) - 1 });
         }
 
-        r.campos.push({ nome: 'NSR', valor: r.nsr, inicio: 1, fim: 9 });
-        r.campos.push({ nome: 'Tipo do registro', valor: r.tipo, inicio: 10, fim: 10 });
+        if (comCampos) {
+            r.campos.push({ nome: 'NSR', valor: r.nsr, inicio: 1, fim: 9 });
+            r.campos.push({ nome: 'Tipo do registro', valor: r.tipo, inicio: 10, fim: 10 });
+        }
 
         switch (r.tipo) {
         case '1':
@@ -783,16 +844,31 @@
             desconhecidos: [],
             cabecalho: null,
             trailer: null,
-            contagens: {},
+            contagens: mapaVazio(),
             inconsistencias: [],
-            pessoas: {},
+            contagemPorCodigo: mapaVazio(),
+            contagemPorNivel: mapaVazio(),
+            inconsistenciasOmitidas: 0,
+            limiteInconsistencias: opcoes.limiteInconsistencias || 5000,
+            pessoas: mapaVazio(),
             ultimoNSR: null,
             ultimoCarimbo: null,
             houveAjuste: false,
-            chavesMarcacao: {}
+            chavesMarcacao: mapaVazio()
         };
 
+        /*
+         * Arquivo muito quebrado pode gerar uma ocorrencia por linha. A lista
+         * para no teto, mas a contagem por codigo continua inteira, para o
+         * resumo nao mentir.
+         */
         function alerta(nivel, codigo, mensagem, linha, nsr, detalhe) {
+            est.contagemPorCodigo[codigo] = (est.contagemPorCodigo[codigo] || 0) + 1;
+            est.contagemPorNivel[nivel] = (est.contagemPorNivel[nivel] || 0) + 1;
+            if (est.inconsistencias.length >= est.limiteInconsistencias) {
+                est.inconsistenciasOmitidas += 1;
+                return;
+            }
             est.inconsistencias.push({
                 nivel: nivel, codigo: codigo, mensagem: mensagem,
                 linha: linha, nsr: nsr || '', detalhe: detalhe || ''
@@ -820,7 +896,7 @@
             var n = est.numeroLinha;
             var linha = String(bruta).replace(/[\r\n]+$/, '');
 
-            if (linha.replace(/\s+/g, '') === '') { est.linhasVazias += 1; return; }
+            if (linha === '' || RE_SO_ESPACO.test(linha)) { est.linhasVazias += 1; return; }
             est.totalLinhas += 1;
 
             if (!est.layout) {
@@ -835,8 +911,11 @@
             }
 
             var tipo = linha.charAt(9);
-            var pareceTrailer = ehSoDigitos(linha) && linha.charAt(linha.length - 1) === '9' &&
-                (linha.length - 1) % 9 === 0 && linha.length !== 34;
+            /* O formato do trailer (contagens de 9 digitos + "9") so e testado
+               quando a linha tem a cara dele: um regex de linha inteira em todas
+               as linhas custa caro em arquivo grande. */
+            var pareceTrailer = linha.charAt(linha.length - 1) === '9' &&
+                (linha.length - 1) % 9 === 0 && linha.length !== 34 && ehSoDigitos(linha);
 
             /* O trailer nao tem NSR: e formado por contagens de 9 digitos + "9" */
             if (!TIPOS[tipo] || pareceTrailer) {
@@ -858,12 +937,12 @@
                 return;
             }
 
-            if (!ehSoDigitos(linha.slice(0, 9))) {
+            if (!RE_NSR.test(linha)) {
                 alerta('erro', 'NSR_INVALIDO', 'NSR com caracteres não numéricos.', n, linha.slice(0, 9));
             }
 
             var layout = est.layout || '1510';
-            var r = layout === '671' ? lerRegistro671(linha) : lerRegistro1510(linha);
+            var r = layout === '671' ? lerRegistro671(linha, false) : lerRegistro1510(linha, false);
             r.numeroLinha = n;
             r.tipoDescricao = TIPOS_ROTULO[r.tipo] || r.tipo;
             est.registros.push(r);
@@ -1093,12 +1172,24 @@
                     if (!periodoReal.fim || c.data > periodoReal.fim) { periodoReal.fim = c.data; }
                 }
 
-                var niveis = { erro: 0, alerta: 0, info: 0 };
-                est.inconsistencias.forEach(function (x) { niveis[x.nivel] = (niveis[x.nivel] || 0) + 1; });
+                var niveis = {
+                    erro: est.contagemPorNivel.erro || 0,
+                    alerta: est.contagemPorNivel.alerta || 0,
+                    info: est.contagemPorNivel.info || 0
+                };
+                if (est.inconsistenciasOmitidas) {
+                    est.inconsistencias.push({
+                        nivel: 'info', codigo: 'LISTA_TRUNCADA',
+                        mensagem: 'A lista para nas primeiras ' + est.limiteInconsistencias +
+                            ' ocorrências; outras ' + est.inconsistenciasOmitidas +
+                            ' foram contadas mas não listadas.',
+                        linha: 0, nsr: '', detalhe: ''
+                    });
+                }
 
                 var pessoas = Object.keys(est.pessoas).map(function (k) { return est.pessoas[k]; });
                 pessoas.sort(function (a, b) {
-                    return (a.nome || '\uFFFF').localeCompare(b.nome || '\uFFFF', 'pt-BR');
+                    return compararTexto(a.nome || '\uFFFF', b.nome || '\uFFFF');
                 });
 
                 return {
@@ -1174,7 +1265,7 @@
                     nome: p.nome || '',
                     nomeExterno: !!p.nomeExterno,
                     data: m.data,
-                    diaSemana: diaDaSemana(m.data),
+                    diaSemana: infoData(m.data).diaSemana,
                     entradas: [],
                     horarios: [],
                     nsrs: []
@@ -1210,7 +1301,7 @@
         linhas.sort(function (a, b) {
             var na = a.nome || a.identificador || '';
             var nb = b.nome || b.identificador || '';
-            if (na !== nb) { return na.localeCompare(nb, 'pt-BR'); }
+            if (na !== nb) { return compararTexto(na, nb); }
             return a.data < b.data ? -1 : (a.data > b.data ? 1 : 0);
         });
         return linhas;
@@ -1239,9 +1330,9 @@
         if (!escala || !somaDaEscala(escala)) { return espelho.slice(); }
 
         function classificar(dia) {
-            var d = dataParaUTC(dia.data);
-            var prevista = d ? escala[d.getUTCDay()] : 0;
-            var nomeDia = diaDaSemana(dia.data).toUpperCase();
+            var info = infoData(dia.data);
+            var prevista = info.valida ? escala[info.dow] : 0;
+            var nomeDia = info.diaSemana.toUpperCase();
             if (prevista > 0) {
                 dia.tipo = 'normal';
                 dia.etiqueta = '';
@@ -1253,13 +1344,13 @@
         }
 
         var limite = opcoes.limiteDias || 400;
-        var pessoas = {};
+        var pessoas = mapaVazio();
         var ordem = [];
 
         espelho.forEach(function (dia) {
             classificar(dia);
             if (!pessoas[dia.chave]) {
-                pessoas[dia.chave] = { modelo: dia, datas: {}, primeira: dia.data, ultima: dia.data };
+                pessoas[dia.chave] = { modelo: dia, datas: mapaVazio(), primeira: dia.data, ultima: dia.data };
                 ordem.push(dia.chave);
             }
             var p = pessoas[dia.chave];
@@ -1286,8 +1377,9 @@
                 contador += 1;
                 var iso = d.toISOString().slice(0, 10);
                 if (!p.datas[iso]) {
-                    var prevista = escala[d.getUTCDay()];
-                    var nomeDia = DIAS_SEMANA[d.getUTCDay()].toUpperCase();
+                    var dow = d.getUTCDay();
+                    var prevista = escala[dow];
+                    var nomeDia = DIAS_SEMANA[dow].toUpperCase();
                     saida.push({
                         chave: chave,
                         identificador: p.modelo.identificador,
@@ -1316,7 +1408,7 @@
         saida.sort(function (a, b) {
             var na = a.nome || a.identificador || '';
             var nb = b.nome || b.identificador || '';
-            if (na !== nb) { return na.localeCompare(nb, 'pt-BR'); }
+            if (na !== nb) { return compararTexto(na, nb); }
             return a.data < b.data ? -1 : (a.data > b.data ? 1 : 0);
         });
         return saida;
@@ -1362,9 +1454,9 @@
             escala = ESCALAS[opcoes.escala].dias;
         }
 
-        var pessoas = {};
-        var semanas = {};
-        var meses = {};
+        var pessoas = mapaVazio();
+        var semanas = mapaVazio();
+        var meses = mapaVazio();
         var total = { dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0 };
 
         function acumular(alvo, dia) {
@@ -1390,15 +1482,15 @@
         }
 
         espelho.forEach(function (dia) {
+            var info = infoData(dia.data);
             if (escala) {
-                var d = dataParaUTC(dia.data);
-                dia.jornadaEsperada = d ? escala[d.getUTCDay()] : jornada;
+                dia.jornadaEsperada = info.valida ? escala[info.dow] : jornada;
             } else {
-                dia.jornadaEsperada = (soUteis && ehFimDeSemana(dia.data)) ? 0 : jornada;
+                dia.jornadaEsperada = (soUteis && (info.dow === 0 || info.dow === 6)) ? 0 : jornada;
             }
             dia.saldo = dia.totalMinutos - dia.jornadaEsperada;
-            dia.chaveSemana = inicioDaSemana(dia.data);
-            dia.chaveMes = String(dia.data).slice(0, 7);
+            dia.chaveSemana = info.semana;
+            dia.chaveMes = info.mes;
 
             var p = pessoas[dia.chave];
             if (!p) {
@@ -1408,10 +1500,10 @@
                 };
             }
             acumular(p, dia);
-            acumular(balde(p.semanas, dia.chaveSemana, { inicio: dia.chaveSemana, fim: fimDaSemana(dia.data) }), dia);
-            acumular(balde(p.meses, dia.chaveMes, { rotulo: nomeDoMes(dia.data) }), dia);
-            acumular(balde(semanas, dia.chaveSemana, { inicio: dia.chaveSemana, fim: fimDaSemana(dia.data) }), dia);
-            acumular(balde(meses, dia.chaveMes, { rotulo: nomeDoMes(dia.data) }), dia);
+            acumular(balde(p.semanas, dia.chaveSemana, { inicio: dia.chaveSemana, fim: info.fimSemana }), dia);
+            acumular(balde(p.meses, dia.chaveMes, { rotulo: info.rotuloMes }), dia);
+            acumular(balde(semanas, dia.chaveSemana, { inicio: dia.chaveSemana, fim: info.fimSemana }), dia);
+            acumular(balde(meses, dia.chaveMes, { rotulo: info.rotuloMes }), dia);
             acumular(total, dia);
         });
 
@@ -1493,7 +1585,7 @@
 
     /* Normaliza { documento: nome } para a chave usada na comparacao */
     function normalizarListaDeNomes(objeto) {
-        var nomes = {};
+        var nomes = mapaVazio();
         var total = 0;
         Object.keys(objeto || {}).forEach(function (doc) {
             var nome = limpar(objeto[doc]);
@@ -1512,8 +1604,17 @@
      * API publica
      * ------------------------------------------------------------------ */
 
+    /* Campos e posicoes de um registro, montados so quando o inspetor abre. */
+    function camposDoRegistro(linha, layout) {
+        if (typeof linha !== 'string' || linha.length < 10) { return []; }
+        var r = layout === '671' ? lerRegistro671(linha, true) : lerRegistro1510(linha, true);
+        return r.campos || [];
+    }
+
     return {
         TIPOS: TIPOS,
+        camposDoRegistro: camposDoRegistro,
+        compararTexto: compararTexto,
         TIPOS_ROTULO: TIPOS_ROTULO,
         TAMANHOS_1510: TAMANHOS_1510,
         OPERACOES: OPERACOES,
