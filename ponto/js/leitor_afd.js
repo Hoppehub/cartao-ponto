@@ -116,8 +116,8 @@
      * Tema
      * ------------------------------------------------------------------ */
 
-    /* A interface e escura por padrao; o claro entra pela preferencia do
-       sistema ou pela escolha explicita, que carimba o atributo. */
+    /* Sem escolha explicita, quem manda e a pagina que hospeda ou o sistema:
+       o atributo so e carimbado quando o visitante troca o tema. */
     function temaEfetivo() {
         var atual = document.documentElement.getAttribute('data-theme');
         if (atual === 'dark' || atual === 'light') { return atual; }
@@ -331,7 +331,7 @@
         resultado.registros.forEach(function (r) { estado.registrosPorLinha[r.numeroLinha] = r; });
         estado.pagina = {};
         estado.ordem = {};
-        estado.filtros = { busca: $('fBusca').value || '', dataIni: '', dataFim: '', pessoa: '', tipo: '', nivel: '' };
+        estado.filtros = { busca: '', dataIni: '', dataFim: '', pessoa: '', tipo: '', nivel: '' };
         estado.aba = 'espelho';
 
         if (resultado.layout === 'desconhecido') {
@@ -339,40 +339,16 @@
                 'Confira se é mesmo um AFD ou selecione o leiaute manualmente antes de carregar de novo.');
         }
 
+        estado.modo = 'espelho';
         document.body.classList.add('carregado');
+        document.body.classList.remove('modo-analises');
         $('tituloZona').textContent = 'Carregar outro arquivo';
-        atualizarSaudacao();
-        atualizarCartaoArquivo();
+        atualizarBotaoAnalises();
 
         $('painel').hidden = false;
         desenharCartoes();
         desenharAbas();
         desenharConteudo();
-    }
-
-    function atualizarSaudacao() {
-        var r = estado.resultado;
-        var cab = r.cabecalho || {};
-        var res = r.resumo;
-        var periodo = res.periodoDeclarado.inicio
-            ? AFD.formatarDataBR(res.periodoDeclarado.inicio) + ' a ' + AFD.formatarDataBR(res.periodoDeclarado.fim)
-            : (res.periodoReal.inicio
-                ? AFD.formatarDataBR(res.periodoReal.inicio) + ' a ' + AFD.formatarDataBR(res.periodoReal.fim)
-                : 'período não declarado');
-
-        $('tituloSaudacao').textContent = cab.razaoSocial || 'Espelho de ponto';
-        $('subtituloSaudacao').textContent = periodo + ' · ' + numeroBR(res.totalPessoas) +
-            ' trabalhador(es) · ' + numeroBR(res.totalMarcacoes) + ' marcação(ões) · ' + r.layoutDescricao;
-    }
-
-    function atualizarCartaoArquivo() {
-        var cartao = $('cartaoArquivo');
-        if (!estado.resultado) { cartao.hidden = true; return; }
-        $('nomeArquivoAtual').textContent = estado.nomeArquivo || 'Conteúdo colado';
-        $('detalheArquivoAtual').textContent =
-            (estado.tamanhoArquivo ? tamanhoLegivel(estado.tamanhoArquivo) + ' · ' : '') +
-            numeroBR(estado.resultado.resumo.totalLinhas) + ' linhas';
-        cartao.hidden = false;
     }
 
     /* ------------------------------------------------------------------ *
@@ -382,69 +358,95 @@
     function desenharCartoes() {
         var r = estado.resultado;
         var res = r.resumo;
-        var dias = estado.espelho.slice();
-        if (estado.faltas !== 'nao') {
-            dias = AFD.completarDias(dias, {
-                escala: escalaEmVigor(),
-                inicio: res.periodoDeclarado.inicio || res.periodoReal.inicio,
-                fim: res.periodoDeclarado.fim || res.periodoReal.fim,
-                todoPeriodo: estado.faltas === 'arquivo'
-            });
-        }
-        var t = AFD.calcularSaldos(dias, opcoesSaldo()).total;
+        var cab = r.cabecalho || {};
+        var periodo = res.periodoDeclarado.inicio
+            ? AFD.formatarDataBR(res.periodoDeclarado.inicio) + ' a ' + AFD.formatarDataBR(res.periodoDeclarado.fim)
+            : (res.periodoReal.inicio
+                ? AFD.formatarDataBR(res.periodoReal.inicio) + ' a ' + AFD.formatarDataBR(res.periodoReal.fim)
+                : '—');
         var erros = res.niveis.erro || 0;
         var alertas = res.niveis.alerta || 0;
+        var classeAuditoria = erros ? 'erro' : (alertas ? 'alerta' : 'ok');
+        var textoAuditoria = erros ? erros + ' erro(s)' : (alertas ? alertas + ' alerta(s)' : 'Sem apontamentos');
 
         var cartoes = [
             {
-                rotulo: 'Trabalhadores',
+                rotulo: 'Leiaute', icone: 'fa-file-shield', classe: '',
+                valor: r.layoutDescricao, texto: true,
+                apoio: estado.codificacao ? 'Codificação ' + estado.codificacao : ''
+            },
+            {
+                rotulo: 'Empregador', icone: 'fa-building', classe: '',
+                valor: cab.razaoSocial || '—', texto: true,
+                apoio: cab.identificadorEmpregador
+                    ? AFD.formatarDocumento(cab.identificadorEmpregador, cab.tipoDocumentoEmpregador) +
+                      (cab.documentoEmpregadorValido === false ? ' (DV inválido)' : '')
+                    : ''
+            },
+            {
+                rotulo: 'Período dos registros', icone: 'fa-calendar-days', classe: '',
+                valor: periodo, texto: true,
+                apoio: res.geracao.data ? 'Gerado em ' + dataHoraBR(res.geracao.data, res.geracao.hora) : ''
+            },
+            {
+                rotulo: 'Marcações de ponto', icone: 'fa-fingerprint', classe: '',
+                valor: numeroBR(res.totalMarcacoes),
+                apoio: numeroBR(res.totalLinhas) + ' linha(s) no arquivo'
+            },
+            {
+                rotulo: 'Trabalhadores', icone: 'fa-users', classe: '',
                 valor: numeroBR(res.totalPessoas),
-                apoio: numeroBR(res.totalMarcacoes) + ' marcação(ões) em ' + numeroBR(res.totalLinhas) + ' linhas'
+                apoio: numeroBR(r.empregados.length) + ' registro(s) de cadastro'
             },
             {
-                rotulo: 'Horas trabalhadas',
-                valor: AFD.formatarMinutos(t.minutos),
-                apoio: 'para ' + AFD.formatarMinutos(t.esperado) + ' de jornada em ' + numeroBR(t.dias) + ' dia(s)'
-            },
-            {
-                rotulo: 'Saldo do período',
-                valor: AFD.formatarSaldo(t.saldo),
-                classeValor: classeSaldo(t.saldo),
-                pilula: { texto: t.saldo >= 0 ? 'a favor' : 'a repor', classe: t.saldo >= 0 ? 'ok' : 'erro' },
-                apoio: (t.faltas ? numeroBR(t.faltas) + ' falta(s)' : 'sem faltas') +
-                    (t.extras ? ' · ' + numeroBR(t.extras) + ' dia(s) de hora extra' : '')
-            },
-            {
-                rotulo: 'Auditoria do arquivo',
-                valor: erros ? numeroBR(erros) : (alertas ? numeroBR(alertas) : '0'),
-                classeValor: erros ? 'negativo' : (alertas ? '' : 'positivo'),
-                pilula: erros
-                    ? { texto: 'erro(s)', classe: 'erro' }
-                    : (alertas ? { texto: 'alerta(s)', classe: 'alerta' } : { texto: 'sem apontamentos', classe: 'ok' }),
-                apoio: numeroBR(res.niveis.info || 0) + ' observação(ões)'
+                rotulo: 'Auditoria', icone: 'fa-clipboard-check', classe: classeAuditoria,
+                valor: textoAuditoria, texto: true,
+                apoio: (res.niveis.info || 0) + ' observação(ões)'
             }
         ];
 
         $('cartoes').innerHTML = cartoes.map(function (c) {
-            return '<div class="cartao">' +
-                '<div class="rotulo">' + esc(c.rotulo) + '</div>' +
-                '<div class="valor ' + (c.classeValor || '') + '">' + esc(c.valor) +
-                (c.pilula ? ' <span class="pilula ' + c.pilula.classe + '">' + esc(c.pilula.texto) + '</span>' : '') +
-                '</div>' +
+            return '<div class="cartao ' + c.classe + '">' +
+                '<div class="rotulo"><i class="fas ' + c.icone + '"></i> ' + esc(c.rotulo) + '</div>' +
+                '<div class="valor' + (c.texto ? ' texto' : '') + '">' + esc(c.valor) + '</div>' +
                 (c.apoio ? '<div class="apoio">' + esc(c.apoio) + '</div>' : '') +
                 '</div>';
         }).join('');
     }
 
     /* ------------------------------------------------------------------ *
-     * Menu lateral
+     * Modos da tela: espelho de ponto (padrão) e demais análises
+     * ------------------------------------------------------------------ */
+
+    function atualizarBotaoAnalises() {
+        var analises = estado.modo === 'analises';
+        $('btnAnalises').classList.toggle('ativo', analises);
+        $('rotuloAnalises').textContent = analises ? 'Voltar ao espelho de ponto' : 'Números para nerd';
+        $('btnAnalises').querySelector('i').className = analises ? 'fas fa-arrow-left' : 'fas fa-chart-simple';
+    }
+
+    function trocarModo() {
+        if (estado.modo === 'analises') {
+            estado.modo = 'espelho';
+            estado.aba = 'espelho';
+        } else {
+            estado.modo = 'analises';
+            if (estado.aba === 'espelho') { estado.aba = 'resumo'; }
+        }
+        document.body.classList.toggle('modo-analises', estado.modo === 'analises');
+        atualizarBotaoAnalises();
+        desenharAbas();
+        desenharConteudo();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Abas
      * ------------------------------------------------------------------ */
 
     function definicaoAbas() {
         var r = estado.resultado;
         return [
-            { id: 'espelho', rotulo: 'Espelho de ponto', icone: 'fa-calendar-check', contador: estado.espelho.length },
-            { grupo: 'Números para nerd' },
             { id: 'resumo', rotulo: 'Resumo', icone: 'fa-chart-simple' },
             { id: 'marcacoes', rotulo: 'Marcações', icone: 'fa-fingerprint', contador: r.marcacoes.length },
             { id: 'pessoas', rotulo: 'Trabalhadores', icone: 'fa-users', contador: r.pessoas.length },
@@ -456,12 +458,10 @@
     }
 
     function desenharAbas() {
-        if (!estado.resultado) { $('abas').innerHTML = ''; return; }
         $('abas').innerHTML = definicaoAbas().map(function (a) {
-            if (a.grupo) { return '<div class="menu-titulo">' + esc(a.grupo) + '</div>'; }
-            return '<button class="item-menu' + (a.id === estado.aba ? ' ativo' : '') + '" data-aba="' + a.id + '">' +
-                '<i class="fas ' + a.icone + '"></i><span>' + esc(a.rotulo) + '</span>' +
-                (a.contador !== undefined ? '<span class="contador">' + numeroBR(a.contador) + '</span>' : '') +
+            return '<button class="aba' + (a.id === estado.aba ? ' ativa' : '') + '" data-aba="' + a.id + '">' +
+                '<i class="fas ' + a.icone + '"></i> ' + esc(a.rotulo) +
+                (a.contador !== undefined ? ' <span class="contador">' + numeroBR(a.contador) + '</span>' : '') +
                 '</button>';
         }).join('');
     }
@@ -473,6 +473,10 @@
     function barraFiltros(opcoes) {
         var f = estado.filtros;
         var partes = ['<div class="filtros">'];
+
+        partes.push('<div class="campo cresce"><label for="fBusca">Buscar</label>' +
+            '<input type="search" id="fBusca" placeholder="' + esc(opcoes.placeholder || 'Nome, documento, NSR...') +
+            '" value="' + esc(f.busca) + '"></div>');
 
         if (opcoes.datas) {
             partes.push('<div class="campo"><label for="fDataIni">De</label>' +
@@ -1715,6 +1719,7 @@
             campo.value = '';
         });
         $('btnRemoverNomes').addEventListener('click', descartarNomes);
+        $('btnAnalises').addEventListener('click', trocarModo);
         $('btnDemo1510').addEventListener('click', function () { carregarDemo('1510'); });
         $('btnDemo671').addEventListener('click', function () { carregarDemo('671'); });
 
@@ -1724,18 +1729,16 @@
             estado.aba = botao.getAttribute('data-aba');
             desenharAbas();
             desenharConteudo();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
-        $('btnTrocarArquivo').addEventListener('click', function () { entrada.click(); });
-
-        var buscarGlobal = debounce(function () {
+        var buscarComAtraso = debounce(function () {
             estado.pagina[estado.aba] = 1;
             desenharTabela();
         }, 180);
-        $('fBusca').addEventListener('input', function () {
-            estado.filtros.busca = $('fBusca').value;
-            buscarGlobal();
+
+        $('conteudo').addEventListener('input', function (e) {
+            var alvo = e.target;
+            if (alvo.id === 'fBusca') { estado.filtros.busca = alvo.value; buscarComAtraso(); }
         });
 
         $('conteudo').addEventListener('change', function (e) {
