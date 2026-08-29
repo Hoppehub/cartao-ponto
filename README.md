@@ -8,11 +8,17 @@ o que importa quando o AFD carrega CPF, PIS e a jornada de pessoas reais.
 
 ## Como a tela se organiza
 
-Ao abrir um AFD a ferramenta vai direto para o **espelho de ponto** — é o que se usa no dia a dia. O topo
-fica com três blocos: identificação, *Carregar outro arquivo* (aceita arrastar) e o botão **Números para
-nerd**, que guarda todo o resto: resumo, marcações, trabalhadores, empregador e REP, relógio e eventos,
-inconsistências e arquivo bruto. Clicando nele a tela troca para as análises; clicando de novo volta ao
-espelho.
+A interface é um painel: **barra lateral** à esquerda com a navegação, **busca** no topo e o conteúdo no
+centro. Ao abrir um AFD a ferramenta vai direto para o **espelho de ponto** — é o que se usa no dia a dia;
+o restante fica no grupo *Números para nerd* da lateral: resumo, marcações, trabalhadores, empregador e
+REP, relógio e eventos, inconsistências e arquivo bruto. O rodapé da lateral mostra o arquivo aberto, com
+um botão para trocar.
+
+Acima do conteúdo, quatro cartões resumem o período: trabalhadores, horas trabalhadas, saldo (com pílula
+*a favor* / *a repor*) e auditoria do arquivo. A busca do topo vale para a seção aberta.
+
+O tema escuro é o padrão; o claro entra pela preferência do sistema ou pelo botão no topo, e a escolha fica
+guardada no navegador.
 
 No cartão de cada pessoa, o nome aparece ao lado do documento quando o arquivo traz o cadastro (registro
 tipo 5). Quando não traz — o que é comum em AFD de REP-C — fica a nota *nome não informado no arquivo*,
@@ -142,8 +148,7 @@ O campo *Dias sem marcação* controla a varredura:
 ### Fechamento de semana e de mês
 
 Ao fim de cada semana e de cada mês entra um bloco com as métricas do período — trabalhadas, esperadas,
-dias trabalhados, faltas, dias extras — e o **saldo** em destaque, com moldura verde ou vermelha. Abaixo,
-uma barra mostra quanto da jornada do período foi cumprido.
+dias trabalhados, faltas, dias extras — e o **saldo** em destaque, com moldura verde ou vermelha.
 
 Como o AFD **não distingue falta de folga, férias, atestado ou feriado**, tudo isso aparece como falta.
 Trate a marcação como ponto de partida da conferência, não como veredito: a justificativa está fora do
