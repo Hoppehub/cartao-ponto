@@ -1583,6 +1583,54 @@
         return { nomes: nomes, total: total, ignorados: ignorados, repetidos: repetidos, separador: separador };
     }
 
+    /*
+     * Lista "documento -> empresa", para separar os colaboradores quando duas
+     * empresas usam o mesmo relogio. Colunas: documento (PIS ou CPF), empresa e,
+     * opcional, CNPJ da empresa. Cabecalho opcional; separador ; , ou tabulacao.
+     */
+    function lerListaDeEmpresas(texto) {
+        var linhas = String(texto == null ? '' : texto).replace(/^\uFEFF/, '').split(/\r\n|\n|\r/);
+        var empresas = mapaVazio();
+        var cnpjs = mapaVazio();
+        var total = 0, ignorados = 0, repetidos = 0;
+        var primeira = '';
+        for (var i = 0; i < linhas.length; i++) {
+            if (linhas[i] && linhas[i].trim()) { primeira = linhas[i]; break; }
+        }
+        if (!primeira) { return { empresas: empresas, cnpjs: cnpjs, total: 0, ignorados: 0, repetidos: 0 }; }
+
+        var separador = [';', '\t', ','].reduce(function (melhor, sep) {
+            return primeira.split(sep).length > primeira.split(melhor).length ? sep : melhor;
+        }, ';');
+        var colDoc = 0, colEmpresa = 1, colCnpj = 2;
+        var cab = primeira.split(separador).map(function (c) { return c.replace(/"/g, '').trim().toLowerCase(); });
+        var temCabecalho = cab.some(function (c) { return /^(pis|cpf|documento|empresa|cnpj|pis\/cpf)$/.test(c); });
+        if (temCabecalho) {
+            cab.forEach(function (c, idx) {
+                if (/^(pis|cpf|documento|doc|pis\/cpf)$/.test(c)) { colDoc = idx; }
+                if (c === 'empresa' || c === 'razao social' || c === 'razão social') { colEmpresa = idx; }
+                if (c === 'cnpj') { colCnpj = idx; }
+            });
+        }
+
+        linhas.forEach(function (linha) {
+            if (!linha || !linha.trim()) { return; }
+            if (temCabecalho && linha === primeira) { return; }
+            var partes = linha.split(separador);
+            var doc = apenasDigitos(partes[colDoc] || '');
+            var empresa = limpar((partes[colEmpresa] || '').replace(/"/g, ''));
+            var cnpj = apenasDigitos(partes[colCnpj] || '');
+            if (doc.length === 10) { doc = '0' + doc; }
+            if (doc.length < 11 || !empresa) { ignorados += 1; return; }
+            var chave = chavePessoa(doc);
+            if (empresas[chave]) { repetidos += 1; return; }
+            empresas[chave] = empresa;
+            if (cnpj.length === 14 && !cnpjs[empresa]) { cnpjs[empresa] = cnpj; }
+            total += 1;
+        });
+        return { empresas: empresas, cnpjs: cnpjs, total: total, ignorados: ignorados, repetidos: repetidos };
+    }
+
     /* Normaliza { documento: nome } para a chave usada na comparacao */
     function normalizarListaDeNomes(objeto) {
         var nomes = mapaVazio();
@@ -1628,6 +1676,7 @@
         ESCALAS: ESCALAS,
         somaDaEscala: somaDaEscala,
         lerListaDeNomes: lerListaDeNomes,
+        lerListaDeEmpresas: lerListaDeEmpresas,
         normalizarListaDeNomes: normalizarListaDeNomes,
         validarCPF: validarCPF,
         validarPIS: validarPIS,

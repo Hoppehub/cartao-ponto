@@ -812,6 +812,14 @@ tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
             <i class="fas fa-check"></i> <span id="textoNomes"></span>
             <button class="btn btn-icone" id="btnRemoverNomes" title="Descartar a lista"><i class="fas fa-xmark"></i></button>
         </span>
+        <button class="btn" id="btnEmpresas" title="Arquivo com documento e empresa, para separar os colaboradores de cada empresa">
+            <i class="fas fa-building"></i> Carregar lista de empresas
+        </button>
+        <input type="file" id="entradaEmpresas" accept=".txt,.csv,.TXT,.CSV,text/plain" hidden>
+        <span class="estado-nomes" id="estadoEmpresas" hidden>
+            <i class="fas fa-check"></i> <span id="textoEmpresas"></span>
+            <button class="btn btn-icone" id="btnRemoverEmpresas" title="Descartar a lista de empresas"><i class="fas fa-xmark"></i></button>
+        </span>
         <button class="btn so-inicial" id="btnDemo1510"><i class="fas fa-flask"></i> Exemplo 1.510/2009</button>
         <button class="btn so-inicial" id="btnDemo671"><i class="fas fa-flask"></i> Exemplo 671/2021</button>
         <div class="campo so-inicial">

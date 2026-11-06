@@ -69,6 +69,31 @@ prioridade sobre as duas; elas só preenchem quem ficou sem nome, e esses aparec
 a marcação *nome vindo da lista carregada* ao passar o cursor. A lista vale enquanto a página estiver
 aberta — não fica gravada no navegador, e como todo o resto, não sai do seu computador.
 
+### Duas empresas no mesmo relógio (opcional)
+
+Quando duas empresas usam o mesmo relógio, o AFD não diz de qual empresa é cada colaborador. O botão
+**Carregar lista de empresas** lê uma planilha salva como CSV, com uma linha por colaborador:
+
+```
+documento;empresa;cnpj
+120.65478.50-2;FORTMAN CONFECCOES LTDA;11.222.333/0001-81
+209.87654.32-7;BORDAMAX BORDADOS LTDA;11.444.777/0001-61
+```
+
+O documento pode ser PIS ou CPF, com ou sem pontuação; o CNPJ é opcional e basta numa linha de cada empresa.
+A lista fica guardada no navegador (ou no programa do computador) até ser descartada pelo **×**. Com ela, o
+espelho ganha o filtro **Empresa**, cada cartão mostra a empresa do colaborador e o relatório sai separado por
+empresa. Sem a lista, vale a empresa do cabeçalho do AFD (caso de um relógio por empresa).
+
+### Relatório por colaborador
+
+O botão **Relatório por colaborador**, no espelho, abre o diálogo de impressão com **um colaborador por página e
+por mês**, em ordem de empresa e de nome — para imprimir ou escolher *Salvar como PDF*. Cada página traz a empresa
+(nome, CNPJ e REP), o colaborador, o mês, a jornada, os dias com marcações, trabalhado, previsto, horas práticas e
+situação, o total de cada semana, os totais do mês e as linhas de assinatura. Os números são os mesmos da tela (o
+relatório usa o mesmo espelho e o mesmo `calcularSaldos`) e seguem os filtros em vigor (período, empresa,
+trabalhador). Se o mês não couber numa folha A4, a letra da página é reduzida (até 5,5 pt) para caber.
+
 ## O que a ferramenta entrega
 
 | Aba | Conteúdo |
@@ -199,6 +224,7 @@ ponto/                    pasta publicada — sobe inteira para o servidor
   index.html              página da ferramenta (interface e estilos)
   js/afd_parser.js        analisador do AFD — sem dependências, roda no navegador e no Node
   js/leitor_afd.js        interface: carga do arquivo, abas, filtros, exportação
+  js/relatorio.js         relatório por colaborador (uma página por colaborador e mês)
   js/nomes_padrao.js      lista fixa de documento/nome da sua instalação (vem vazia)
   exemplos/               arquivos AFD fictícios para teste
 testes/gerar_exemplos.js  gera os arquivos de exemplo

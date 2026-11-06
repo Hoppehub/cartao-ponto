@@ -32,7 +32,11 @@
         nomeArquivo: '',
         codificacao: '',
         tamanhoArquivo: 0,
-        filtros: { busca: '', dataIni: '', dataFim: '', pessoa: '', tipo: '', nivel: '' }
+        filtros: { busca: '', dataIni: '', dataFim: '', pessoa: '', empresa: '', tipo: '', nivel: '' },
+        /* documento -> empresa, para separar quem trabalha em cada empresa do mesmo relogio */
+        empresasLista: null,
+        empresasCnpj: {},
+        versaoEmpresas: 0
     };
 
     /* ------------------------------------------------------------------ *
@@ -323,6 +327,96 @@
         }
     }
 
+    /*
+     * Empresa de cada colaborador: a lista "documento -> empresa", quando
+     * carregada, manda; sem ela, vale a empresa do cabecalho do AFD (caso de um
+     * relogio por empresa).
+     */
+    function empresaDe(chave) {
+        if (estado.empresasLista && estado.empresasLista[chave]) { return estado.empresasLista[chave]; }
+        var cab = estado.resultado && estado.resultado.cabecalho;
+        return (cab && cab.razaoSocial) || 'Empresa não informada';
+    }
+
+    /* CNPJ da empresa: o da lista, ou o do cabecalho quando a empresa e a do AFD. */
+    function cnpjDe(empresa) {
+        if (estado.empresasCnpj[empresa]) { return estado.empresasCnpj[empresa]; }
+        var cab = estado.resultado && estado.resultado.cabecalho;
+        if (cab && cab.razaoSocial === empresa && cab.tipoDocumentoEmpregador === 'CNPJ') {
+            return cab.identificadorEmpregador;
+        }
+        return '';
+    }
+
+    function empresasPresentes() {
+        if (!estado.resultado) { return []; }
+        var vistas = {};
+        estado.resultado.pessoas.forEach(function (p) { vistas[empresaDe(p.chave)] = true; });
+        return Object.keys(vistas).sort(AFD.compararTexto);
+    }
+
+    function mostrarEstadoEmpresas() {
+        var alvo = $('estadoEmpresas');
+        if (!estado.empresasLista) { alvo.hidden = true; return; }
+        var total = Object.keys(estado.empresasLista).length;
+        var nomes = {};
+        Object.keys(estado.empresasLista).forEach(function (k) { nomes[estado.empresasLista[k]] = true; });
+        $('textoEmpresas').textContent = numeroBR(total) + ' colaborador(es) em ' +
+            numeroBR(Object.keys(nomes).length) + ' empresa(s)';
+        alvo.hidden = false;
+    }
+
+    function guardarEmpresas() {
+        try {
+            if (estado.empresasLista) {
+                localStorage.setItem('leitor-afd-empresas', JSON.stringify({
+                    empresas: estado.empresasLista, cnpjs: estado.empresasCnpj
+                }));
+            } else {
+                localStorage.removeItem('leitor-afd-empresas');
+            }
+        } catch (e) { /* modo privado: vale so nesta sessao */ }
+    }
+
+    function aplicarEmpresas() {
+        estado.versaoEmpresas += 1;
+        estado.filtros.empresa = '';
+        guardarEmpresas();
+        mostrarEstadoEmpresas();
+        if (estado.resultado) {
+            desenharCartoes();
+            desenharAbas();
+            desenharConteudo();
+        }
+    }
+
+    function carregarEmpresas(arquivo) {
+        if (!arquivo) { return; }
+        var leitor = new FileReader();
+        leitor.onerror = function () { mostrarAviso('Não foi possível ler a lista de empresas.'); };
+        leitor.onload = function () {
+            var lista = AFD.lerListaDeEmpresas(decodificar(leitor.result).texto);
+            if (!lista.total) {
+                mostrarAviso('Nenhuma empresa reconhecida na lista. O arquivo precisa ter uma coluna de documento ' +
+                    '(PIS ou CPF) e uma de empresa (e, se quiser, o CNPJ), separadas por ponto e vírgula.');
+                return;
+            }
+            mostrarAviso(lista.ignorados
+                ? numeroBR(lista.ignorados) + ' linha(s) da lista de empresas sem documento ou empresa foram ignoradas.'
+                : '');
+            estado.empresasLista = lista.empresas;
+            estado.empresasCnpj = lista.cnpjs;
+            aplicarEmpresas();
+        };
+        leitor.readAsArrayBuffer(arquivo);
+    }
+
+    function descartarEmpresas() {
+        estado.empresasLista = null;
+        estado.empresasCnpj = {};
+        aplicarEmpresas();
+    }
+
     function concluir(resultado) {
         $('progresso').style.display = 'none';
         estado.resultado = resultado;
@@ -337,7 +431,7 @@
         resultado.registros.forEach(function (r) { estado.registrosPorLinha[r.numeroLinha] = r; });
         estado.pagina = {};
         estado.ordem = {};
-        estado.filtros = { busca: '', dataIni: '', dataFim: '', pessoa: '', tipo: '', nivel: '' };
+        estado.filtros = { busca: '', dataIni: '', dataFim: '', pessoa: '', empresa: '', tipo: '', nivel: '' };
         estado.aba = 'espelho';
 
         if (resultado.layout === 'desconhecido') {
@@ -489,6 +583,18 @@
                 '<input type="date" id="fDataIni" value="' + esc(f.dataIni) + '"></div>');
             partes.push('<div class="campo"><label for="fDataFim">Até</label>' +
                 '<input type="date" id="fDataFim" value="' + esc(f.dataFim) + '"></div>');
+        }
+
+        if (opcoes.empresas) {
+            var empresas = empresasPresentes();
+            if (empresas.length > 1 || estado.empresasLista) {
+                partes.push('<div class="campo"><label for="fEmpresa">Empresa</label>' +
+                    '<select id="fEmpresa"><option value="">Todas</option>' +
+                    empresas.map(function (nome) {
+                        return '<option value="' + esc(nome) + '"' + (f.empresa === nome ? ' selected' : '') + '>' +
+                            esc(nome) + '</option>';
+                    }).join('') + '</select></div>');
+            }
         }
 
         if (opcoes.pessoas) {
@@ -786,7 +892,7 @@
         switch (estado.aba) {
         case 'resumo': html = abaResumo(); break;
         case 'marcacoes': html = barraFiltros({ datas: true, pessoas: true, tipos: true }) + '<div id="areaTabela"></div>'; break;
-        case 'espelho': html = barraFiltros({ datas: true, pessoas: true, visao: true, jornada: true }) + '<div id="areaTabela"></div>'; break;
+        case 'espelho': html = barraFiltros({ datas: true, empresas: true, pessoas: true, visao: true, jornada: true }) + '<div id="areaTabela"></div>'; break;
         case 'pessoas': html = barraFiltros({ placeholder: 'Nome ou documento...' }) + '<div id="areaTabela"></div>'; break;
         case 'empresa': html = abaEmpresa(); break;
         case 'eventos': html = barraFiltros({ datas: true, exportar: true }) + '<div id="areaTabela"></div>'; break;
@@ -955,7 +1061,7 @@
     function chaveDoEspelho() {
         var f = estado.filtros;
         return [
-            estado.versaoEspelho, f.busca, f.dataIni, f.dataFim, f.pessoa,
+            estado.versaoEspelho, f.busca, f.dataIni, f.dataFim, f.pessoa, f.empresa, estado.versaoEmpresas,
             estado.faltas, estado.escalaTipo, estado.jornadaMinutos,
             estado.escalaTipo === 'custom' ? estado.escalaCustom.join(',') : ''
         ].join('|');
@@ -967,6 +1073,7 @@
         var f = estado.filtros;
         var base = estado.espelho.filter(function (e) {
             if (f.pessoa && e.chave !== f.pessoa) { return false; }
+            if (f.empresa && empresaDe(e.chave) !== f.empresa) { return false; }
             return filtroTexto([e.nome, e.identificador, e.data]);
         });
 
@@ -1070,6 +1177,7 @@
         var grupos = agrupado.grupos;
 
         var fatia = fatiarPagina('espelho', ordem.length, POR_PAGINA_CARTOES, 'trabalhador(es)');
+        var mostrarEmpresa = !!estado.empresasLista || empresasPresentes().length > 1;
         var html = ['<div class="cartoes-doc">'];
 
         ordem.slice(fatia.inicio, fatia.fim).forEach(function (chave, i) {
@@ -1086,6 +1194,7 @@
                       (g.nomeExterno ? ' title="Nome vindo da lista carregada, não do AFD"' : '') + '>' +
                       esc(g.nome) + '</span>'
                     : '<span class="sem-nome">nome não informado no arquivo</span>') +
+                (mostrarEmpresa ? '<span class="etiqueta neutra" title="Empresa">' + esc(empresaDe(chave)) + '</span>' : '') +
                 '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · saldo ' +
                 saldoHTML(saldos.pessoas[chave].saldo) + '</span>' +
                 '</header>');
@@ -1748,6 +1857,13 @@
             campo.value = '';
         });
         $('btnRemoverNomes').addEventListener('click', descartarNomes);
+        $('btnEmpresas').addEventListener('click', function () { $('entradaEmpresas').click(); });
+        $('entradaEmpresas').addEventListener('change', function () {
+            var campo = $('entradaEmpresas');
+            carregarEmpresas(campo.files[0]);
+            campo.value = '';
+        });
+        $('btnRemoverEmpresas').addEventListener('click', descartarEmpresas);
         $('btnAnalises').addEventListener('click', trocarModo);
         $('btnDemo1510').addEventListener('click', function () { carregarDemo('1510'); });
         $('btnDemo671').addEventListener('click', function () { carregarDemo('671'); });
@@ -1772,7 +1888,7 @@
 
         $('conteudo').addEventListener('change', function (e) {
             var alvo = e.target;
-            var mapa = { fDataIni: 'dataIni', fDataFim: 'dataFim', fPessoa: 'pessoa', fTipo: 'tipo', fNivel: 'nivel' };
+            var mapa = { fDataIni: 'dataIni', fDataFim: 'dataFim', fPessoa: 'pessoa', fEmpresa: 'empresa', fTipo: 'tipo', fNivel: 'nivel' };
             if (mapa[alvo.id]) {
                 estado.filtros[mapa[alvo.id]] = alvo.value;
                 estado.pagina[estado.aba] = 1;
@@ -1872,6 +1988,14 @@
         if (customSalva && customSalva.length === 7) { estado.escalaCustom = customSalva; }
     } catch (e) { /* modo privado */ }
 
+    try {
+        var empresasSalvas = JSON.parse(localStorage.getItem('leitor-afd-empresas') || 'null');
+        if (empresasSalvas && empresasSalvas.empresas && Object.keys(empresasSalvas.empresas).length) {
+            estado.empresasLista = empresasSalvas.empresas;
+            estado.empresasCnpj = empresasSalvas.cnpjs || {};
+        }
+    } catch (e) { /* modo privado ou valor corrompido: sem lista */ }
+
     if (window.LEITOR_AFD_NOMES) {
         var padrao = AFD.normalizarListaDeNomes(window.LEITOR_AFD_NOMES);
         if (padrao.total) {
@@ -1909,10 +2033,13 @@
                 fim: estado.filtros.dataFim || linhas.reduce(function (m, l) { return l.data > m ? l.data : m; }, '')
             },
             escala: { rotulo: rotuloEscala, dias: escalaEmVigor() },
-            documento: documento
+            documento: documento,
+            empresaDe: empresaDe,
+            cnpjDe: cnpjDe
         };
     };
 
     iniciarTema();
     ligarEventos();
+    mostrarEstadoEmpresas();
 }());

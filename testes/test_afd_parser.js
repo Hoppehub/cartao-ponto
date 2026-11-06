@@ -441,6 +441,25 @@ ok(!!diaComNome, 'o espelho recebe o nome vindo da lista');
 igual(diaComNome.nomeExterno, true, 'a origem do nome fica marcada');
 
 /* ------------------------------------------------------------------ */
+grupo('Lista de empresas');
+
+var empresas = AFD.lerListaDeEmpresas(
+    'documento;empresa;cnpj\n' +
+    '120.65478.50-2;FORTMAN CONFECCOES LTDA;11.222.333/0001-81\n' +
+    '20987654327;BORDAMAX BORDADOS LTDA;\n' +
+    '1234567890;EMPRESA DO ZERO;\n' +
+    '20987654327;OUTRA;\n' +
+    'sem documento;NINGUEM;\n');
+igual(empresas.total, 3, 'empresas: três colaboradores reconhecidos');
+igual(empresas.empresas[AFD.chavePessoa('12065478502')], 'FORTMAN CONFECCOES LTDA', 'empresas: PIS com pontuação');
+igual(empresas.empresas[AFD.chavePessoa('01234567890')], 'EMPRESA DO ZERO', 'empresas: zero à esquerda devolvido');
+igual(empresas.cnpjs['FORTMAN CONFECCOES LTDA'], '11222333000181', 'empresas: CNPJ só com dígitos');
+igual(empresas.repetidos, 1, 'empresas: documento repetido fica com a primeira empresa');
+igual(empresas.ignorados, 1, 'empresas: linha sem documento ignorada');
+var semCabecalho = AFD.lerListaDeEmpresas('11144477735;Alfa\n52998224725;Beta\n');
+igual(semCabecalho.total, 2, 'empresas: sem cabeçalho, documento e empresa nas duas primeiras colunas');
+igual(AFD.lerListaDeEmpresas('').total, 0, 'empresas: lista vazia');
+
 grupo('Leitura enxuta');
 
 /* os campos com posicoes so sao montados quando o inspetor pede */
