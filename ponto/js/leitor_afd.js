@@ -576,6 +576,10 @@
             partes.push('<button class="btn" id="btnCopiar"><i class="fas fa-copy"></i> Copiar</button>');
             partes.push('<button class="btn btn-primario" id="btnCsv"><i class="fas fa-file-csv"></i> Baixar CSV</button>');
         }
+        if (estado.aba === 'espelho') {
+            partes.push('<button class="btn btn-primario" id="btnRelatorio" title="Um colaborador por página, pronto para imprimir ou salvar em PDF">' +
+                '<i class="fas fa-file-pdf"></i> Relatório por colaborador</button>');
+        }
         partes.push('</div>');
 
         if (opcoes.jornada && estado.escalaTipo === 'custom') {
@@ -1875,6 +1879,39 @@
             estado.nomesInfo = { total: padrao.total, casados: 0, origem: 'padrao' };
         }
     }
+
+    /*
+     * Espelho em vigor (filtros, escala e dias completados iguais aos da tela),
+     * para o relatório por colaborador de relatorio.js. Os totais saem do mesmo
+     * calcularSaldos dos cartões, então o papel bate com a tela.
+     */
+    window.LeitorAFD = window.LeitorAFD || {};
+    window.LeitorAFD.dadosDoEspelho = function () {
+        if (!estado.resultado) { return null; }
+        var linhas = espelhoFiltrado();
+        var saldos = AFD.calcularSaldos(linhas, opcoesSaldo());
+        var agrupado = agruparPorDocumento(linhas);
+        var res = estado.resultado;
+        var pronta = AFD.ESCALAS[estado.escalaTipo];
+        var rotuloEscala = pronta ? pronta.rotulo
+            : (estado.escalaTipo === 'diaria'
+                ? 'Mesma jornada em todo dia com marcação (' + AFD.formatarMinutos(estado.jornadaMinutos) + ')'
+                : 'Personalizada por dia da semana');
+        return {
+            ordem: agrupado.ordem,
+            grupos: agrupado.grupos,
+            saldos: saldos,
+            cabecalho: res.cabecalho || {},
+            layout: res.layout,
+            nomeArquivo: estado.nomeArquivo,
+            periodo: {
+                inicio: estado.filtros.dataIni || linhas.reduce(function (m, l) { return !m || l.data < m ? l.data : m; }, ''),
+                fim: estado.filtros.dataFim || linhas.reduce(function (m, l) { return l.data > m ? l.data : m; }, '')
+            },
+            escala: { rotulo: rotuloEscala, dias: escalaEmVigor() },
+            documento: documento
+        };
+    };
 
     iniciarTema();
     ligarEventos();
