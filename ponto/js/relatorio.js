@@ -38,6 +38,21 @@
 
     function temFechada(dia) { return Object.prototype.hasOwnProperty.call(dia, 'saldoFechado'); }
 
+    /* Alertas em forma curta, para caberem na coluna do papel. */
+    var ALERTA_CURTO = [
+        [/^INTERVALO MENOR QUE 1H/, 'Intervalo < 1h (art. 71)'],
+        [/^SEM INTERVALO REGISTRADO/, 'Sem intervalo (art. 71)'],
+        [/^INTERVALO MENOR QUE 15 MIN/, 'Intervalo < 15 min (art. 71)'],
+        [/^DESCANSO ENTRE JORNADAS/, 'Descanso < 11h (art. 66)'],
+        [/^MAIS DE 12H/, 'Mais de 12h no dia']
+    ];
+    function alertaCurto(texto) {
+        for (var i = 0; i < ALERTA_CURTO.length; i++) {
+            if (ALERTA_CURTO[i][0].test(texto)) { return ALERTA_CURTO[i][1]; }
+        }
+        return texto;
+    }
+
     /* Situação do dia: calendário, etiqueta do leitor, pendências, tolerância e alertas. */
     function situacao(dia) {
         var partes = [];
@@ -46,8 +61,8 @@
             partes.push((dia.calendario.tipo === 'feriado' ? 'FERIADO' : 'PONTO FACULTATIVO') + ' — ' + dia.calendario.nome);
         }
         if (dia.etiqueta && dia.etiqueta !== 'FERIADO') { partes.push(dia.etiqueta); }
-        if (dia.toleranciaAplicada) { partes.push('tolerância aplicada'); }
-        (dia.alertas || []).forEach(function (a) { partes.push(a); });
+        if (dia.toleranciaAplicada) { partes.push('tolerância'); }
+        (dia.alertas || []).forEach(function (a) { partes.push(alertaCurto(a)); });
         return partes.join(' · ');
     }
 
@@ -80,8 +95,9 @@
             t.minutos += d.totalMinutos || 0;
             t.esperado += d.jornadaEsperada || 0;
             t.saldo += d.saldo || 0;
+            if (d.saldoFechado != null && d.statusSaldo !== 'pendente') { t.fechada += d.saldoFechado; }
             return t;
-        }, { minutos: 0, esperado: 0, saldo: 0, inicio: dias[0].data, fim: dias[dias.length - 1].data });
+        }, { minutos: 0, esperado: 0, saldo: 0, fechada: 0, inicio: dias[0].data, fim: dias[dias.length - 1].data });
     }
 
     function linhaSemana(b, colunas) {
@@ -89,7 +105,8 @@
             '<td class="num">' + esc(horas(b.minutos)) + '</td>' +
             '<td class="num">' + esc(horas(b.esperado)) + '</td>' +
             '<td class="num ' + classe(b.saldo) + '">' + esc(saldo(b.saldo)) + '</td>' +
-            '<td colspan="' + (colunas - 6) + '"></td></tr>';
+            (colunas === 8 ? '<td class="num ' + classe(b.fechada) + '">' + esc(saldo(b.fechada)) + '</td><td></td>' : '<td></td>') +
+            '</tr>';
     }
 
     function pagina(dados, item, numero, total) {
@@ -218,6 +235,7 @@
         '#' + ID + ' tr{break-inside:avoid;page-break-inside:avoid}' +
         '#' + ID + ' .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}' +
         '#' + ID + ' .mono{font-family:"Courier New",monospace;font-size:1em}' +
+        '#' + ID + ' td.mono{white-space:nowrap}' +
         '#' + ID + ' .sit{font-size:0.833em}' +
         '#' + ID + ' .neg{color:#b00000}' +
         '#' + ID + ' .pos{color:#006b2d}' +
