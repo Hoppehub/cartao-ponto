@@ -313,6 +313,17 @@
         return infoData(iso).diaSemana;
     }
 
+    /* AAAA-MM-DD que existe no calendario (31/02 nao existe) */
+    function dataIsoValida(iso) {
+        var d = dataParaUTC(iso);
+        return !!d && d.toISOString().slice(0, 10) === iso;
+    }
+
+    /* HH:MM[:SS] entre 00:00 e 23:59 */
+    function horaValidaTexto(hora) {
+        return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(hora || ''));
+    }
+
     function dataParaUTC(iso) {
         var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
         if (!m) { return null; }
@@ -1061,6 +1072,8 @@
                 }
 
                 var dataConfiavel = r.dataValida !== false && !!m.data;
+                /* data/hora impossivel (31/02, 25:00) deixa o dia "para conferir" no espelho */
+                m.valida = dataConfiavel && dataIsoValida(m.data) && horaValidaTexto(m.hora);
                 if (!dataConfiavel) {
                     alerta('erro', 'DATA_INVALIDA', 'Data/hora inválida na marcação de ponto.', n, r.nsr, linha.slice(10, 40));
                 }
@@ -1248,7 +1261,98 @@
      * Espelho de ponto (marcacoes agrupadas por trabalhador e dia)
      * ------------------------------------------------------------------ */
 
-    function montarEspelho(marcacoes, pessoas) {
+    /*
+     * opcoes.datasAjuste  { 'AAAA-MM-DD': true } dias com ajuste do relogio
+     *                     (registro tipo 4): o pareamento pode estar trocado.
+     *
+     * Cada dia recebe "pendencias": motivos que impedem fechar o saldo sem
+     * alguem conferir (marcacao impar, repetida, invalida, ajuste do relogio).
+     * Nenhuma batida e apagada nem inventada.
+     */
+    /*
+     * SHA-256 dos bytes do arquivo, para o rodape do relatorio: identifica o
+     * AFD exato que gerou os numeros. Recebe Uint8Array (ou texto, em UTF-8).
+     */
+    var K256 = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+
+    function bytesUtf8(texto) {
+        var s = unescape(encodeURIComponent(String(texto)));
+        var b = new Uint8Array(s.length);
+        for (var i = 0; i < s.length; i++) { b[i] = s.charCodeAt(i); }
+        return b;
+    }
+
+    function sha256(entrada) {
+        var dados = typeof entrada === 'string' ? bytesUtf8(entrada) : new Uint8Array(entrada);
+        var n = dados.length;
+        var total = ((n + 9 + 63) >> 6) << 6;
+        var msg = new Uint8Array(total);
+        msg.set(dados);
+        msg[n] = 0x80;
+        var bits = n * 8;
+        msg[total - 4] = (bits >>> 24) & 0xff;
+        msg[total - 3] = (bits >>> 16) & 0xff;
+        msg[total - 2] = (bits >>> 8) & 0xff;
+        msg[total - 1] = bits & 0xff;
+        msg[total - 5] = Math.floor(n / 0x20000000) & 0xff;
+        var h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+        var w = new Array(64);
+        function rotr(x, k) { return (x >>> k) | (x << (32 - k)); }
+        for (var off = 0; off < total; off += 64) {
+            for (var t = 0; t < 16; t++) {
+                var j = off + t * 4;
+                w[t] = ((msg[j] << 24) | (msg[j + 1] << 16) | (msg[j + 2] << 8) | msg[j + 3]) | 0;
+            }
+            for (t = 16; t < 64; t++) {
+                var s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ (w[t - 15] >>> 3);
+                var s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ (w[t - 2] >>> 10);
+                w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+            }
+            var a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+            for (t = 0; t < 64; t++) {
+                var S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+                var ch = (e & f) ^ (~e & g);
+                var t1 = (hh + S1 + ch + K256[t] + w[t]) | 0;
+                var S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+                var maj = (a & b) ^ (a & c) ^ (b & c);
+                var t2 = (S0 + maj) | 0;
+                hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+            }
+            h[0] = (h[0] + a) | 0; h[1] = (h[1] + b) | 0; h[2] = (h[2] + c) | 0; h[3] = (h[3] + d) | 0;
+            h[4] = (h[4] + e) | 0; h[5] = (h[5] + f) | 0; h[6] = (h[6] + g) | 0; h[7] = (h[7] + hh) | 0;
+        }
+        return h.map(function (x) { return ('0000000' + (x >>> 0).toString(16)).slice(-8); }).join('');
+    }
+
+    /*
+     * Celula de planilha (CSV ou copia): texto que comeca com = + - @ tabulacao
+     * ou retorno vira formula no Excel. Ganha um apostrofo na frente. Numeros e
+     * horas com sinal (-00:52, +01:30, 12, 3,5) ficam como estao.
+     */
+    function celulaPlanilha(valor) {
+        var s = String(valor == null ? '' : valor);
+        if (!/^[=+\-@\t\r]/.test(s)) { return s; }
+        if (/^[+-]?\d{1,4}:\d{2}$/.test(s) || /^[+-]?\d+([.,]\d+)?$/.test(s)) { return s; }
+        return "'" + s;
+    }
+
+    /* versao das regras de calculo; sobe sempre que uma regra de saldo mudar */
+    var VERSAO = '2.0.0';
+
+    /* batida ate 5 minutos depois da anterior e tratada como repetida suspeita */
+    var LIMITE_REPETIDA = 5;
+
+    function montarEspelho(marcacoes, pessoas, opcoes) {
+        var datasAjuste = (opcoes && opcoes.datasAjuste) || {};
         var mapaNomes = {};
         (pessoas || []).forEach(function (p) { mapaNomes[p.chave] = p; });
 
@@ -1271,7 +1375,7 @@
                     nsrs: []
                 };
             }
-            grupos[k].entradas.push({ hora: m.hora || '', nsr: m.nsr, tipo: m.tipo });
+            grupos[k].entradas.push({ hora: m.hora || '', nsr: m.nsr, tipo: m.tipo, valida: m.valida !== false });
         });
 
         var linhas = Object.keys(grupos).map(function (k) {
@@ -1295,6 +1399,20 @@
             g.impar = g.horarios.length % 2 === 1;
             g.total = formatarMinutos(g.totalMinutos);
             g.quantidade = g.horarios.length;
+
+            g.pendencias = [];
+            if (g.impar) { g.pendencias.push('MARCAÇÃO ÍMPAR'); }
+            for (var j = 1; j < g.horarios.length; j++) {
+                var anterior = minutosDoDia(g.horarios[j - 1]);
+                var atual = minutosDoDia(g.horarios[j]);
+                if (anterior !== null && atual !== null && atual - anterior <= LIMITE_REPETIDA) {
+                    g.pendencias.push('MARCAÇÃO REPETIDA (' + g.horarios[j - 1].slice(0, 5) + ' e ' + g.horarios[j].slice(0, 5) + ')');
+                }
+            }
+            if (g.entradas.some(function (e) { return !e.valida; }) || !dataIsoValida(g.data)) {
+                g.pendencias.push('DATA OU HORA INVÁLIDA');
+            }
+            if (datasAjuste[g.data]) { g.pendencias.push('AJUSTE DO RELÓGIO NESTE DIA'); }
             return g;
         });
 
@@ -1329,10 +1447,16 @@
         var escala = opcoes.escala && opcoes.escala.length === 7 ? opcoes.escala : null;
         if (!escala || !somaDaEscala(escala)) { return espelho.slice(); }
 
+        var comCalendario = !!opcoes.calendario;
+        function calendario(iso) { return comCalendario ? diaDoCalendario(iso, opcoes.feriadosLocais) : null; }
+
         function classificar(dia) {
             var info = infoData(dia.data);
-            var prevista = info.valida ? escala[info.dow] : 0;
-            var nomeDia = info.diaSemana.toUpperCase();
+            var cal = calendario(dia.data);
+            var feriado = !!cal && cal.tipo === 'feriado';
+            var prevista = info.valida && !feriado ? escala[info.dow] : 0;
+            var nomeDia = feriado ? 'FERIADO' : info.diaSemana.toUpperCase();
+            if (comCalendario) { dia.calendario = cal; }
             if (prevista > 0) {
                 dia.tipo = 'normal';
                 dia.etiqueta = '';
@@ -1378,9 +1502,11 @@
                 var iso = d.toISOString().slice(0, 10);
                 if (!p.datas[iso]) {
                     var dow = d.getUTCDay();
-                    var prevista = escala[dow];
-                    var nomeDia = DIAS_SEMANA[dow].toUpperCase();
-                    saida.push({
+                    var cal = calendario(iso);
+                    var feriado = !!cal && cal.tipo === 'feriado';
+                    var prevista = feriado ? 0 : escala[dow];
+                    var nomeDia = feriado ? 'FERIADO' : DIAS_SEMANA[dow].toUpperCase();
+                    var novo = {
                         chave: chave,
                         identificador: p.modelo.identificador,
                         tipoIdentificador: p.modelo.tipoIdentificador,
@@ -1398,8 +1524,11 @@
                         impar: false,
                         tipo: prevista > 0 ? 'falta' : 'folga',
                         falta: prevista > 0,
-                        etiqueta: prevista > 0 ? 'FALTA' : nomeDia
-                    });
+                        etiqueta: prevista > 0 ? 'FALTA' : nomeDia,
+                        pendencias: []
+                    };
+                    if (comCalendario) { novo.calendario = cal; }
+                    saida.push(novo);
                 }
                 d.setUTCDate(d.getUTCDate() + 1);
             }
@@ -1412,6 +1541,80 @@
             return a.data < b.data ? -1 : (a.data > b.data ? 1 : 0);
         });
         return saida;
+    }
+
+    /*
+     * Calendario: feriados nacionais (jornada prevista zero) e pontos
+     * facultativos (dia normal de trabalho na Fortman, so marcado na tela).
+     * Datas moveis pela Pascoa; feriados estaduais/municipais entram por
+     * opcoes.feriadosLocais = { 'AAAA-MM-DD' ou 'MM-DD': 'Nome' }.
+     */
+    var FERIADOS_FIXOS = {
+        '01-01': 'Confraternização Universal',
+        '04-21': 'Tiradentes',
+        '05-01': 'Dia do Trabalho',
+        '09-07': 'Independência do Brasil',
+        '10-12': 'Nossa Senhora Aparecida',
+        '11-02': 'Finados',
+        '11-15': 'Proclamação da República',
+        '11-20': 'Dia Nacional de Zumbi e da Consciência Negra',
+        '12-25': 'Natal'
+    };
+    var FACULTATIVOS_FIXOS = {
+        '10-28': 'Dia do Servidor Público',
+        '12-24': 'Véspera de Natal',
+        '12-31': 'Véspera de Ano Novo'
+    };
+    /* dias contados a partir do Domingo de Pascoa */
+    var MOVEIS = [
+        [-48, 'facultativo', 'Carnaval'],
+        [-47, 'facultativo', 'Carnaval'],
+        [-46, 'facultativo', 'Quarta-feira de Cinzas'],
+        [-2, 'feriado', 'Paixão de Cristo'],
+        [60, 'facultativo', 'Corpus Christi']
+    ];
+    var CACHE_CALENDARIO = mapaVazio();
+
+    /* Domingo de Pascoa (algoritmo de Meeus/Jones/Butcher, calendario gregoriano). */
+    function pascoa(ano) {
+        var a = ano % 19, b = Math.floor(ano / 100), c = ano % 100;
+        var d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+        var g = Math.floor((b - f + 1) / 3);
+        var h = (19 * a + b - d - g + 15) % 30;
+        var i = Math.floor(c / 4), k = c % 4;
+        var l = (32 + 2 * e + 2 * i - h - k) % 7;
+        var m = Math.floor((a + 11 * h + 22 * l) / 451);
+        var mes = Math.floor((h + l - 7 * m + 114) / 31);
+        var dia = ((h + l - 7 * m + 114) % 31) + 1;
+        return pad(ano, 4) + '-' + pad(mes, 2) + '-' + pad(dia, 2);
+    }
+
+    function calendarioDoAno(ano) {
+        if (CACHE_CALENDARIO[ano]) { return CACHE_CALENDARIO[ano]; }
+        var lista = mapaVazio();
+        Object.keys(FACULTATIVOS_FIXOS).forEach(function (md) {
+            lista[ano + '-' + md] = { tipo: 'facultativo', nome: FACULTATIVOS_FIXOS[md] };
+        });
+        Object.keys(FERIADOS_FIXOS).forEach(function (md) {
+            lista[ano + '-' + md] = { tipo: 'feriado', nome: FERIADOS_FIXOS[md] };
+        });
+        var base = dataParaUTC(pascoa(ano)).getTime();
+        MOVEIS.forEach(function (mv) {
+            var iso = new Date(base + mv[0] * 86400000).toISOString().slice(0, 10);
+            if (!lista[iso] || lista[iso].tipo !== 'feriado') { lista[iso] = { tipo: mv[1], nome: mv[2] }; }
+        });
+        CACHE_CALENDARIO[ano] = lista;
+        return lista;
+    }
+
+    /* { tipo: 'feriado' | 'facultativo', nome } ou null */
+    function diaDoCalendario(iso, locais) {
+        if (!dataIsoValida(iso)) { return null; }
+        if (locais) {
+            var local = locais[iso] || locais[iso.slice(5)];
+            if (local) { return { tipo: 'feriado', nome: String(local) }; }
+        }
+        return calendarioDoAno(Number(iso.slice(0, 4)))[iso] || null;
     }
 
     /*
@@ -1431,13 +1634,89 @@
      * primeiras sao as formas usuais de fechar as 44h.
      */
     var ESCALAS = {
-        'sem44_9h_sex8h': { rotulo: '44h por semana — 9h de segunda a quinta e 8h na sexta', dias: [0, 540, 540, 540, 540, 480, 0] },
+        'sem44_9h_sex8h': {
+            rotulo: '44h por semana — 06:55 às 16:55, sexta até 15:55 (1h de almoço)',
+            dias: [0, 540, 540, 540, 540, 480, 0],
+            /* horarios previstos de cada batida, base da HORA FECHADA (tolerancia por marcacao) */
+            horarios: [null,
+                ['06:55', '11:55', '12:55', '16:55'], ['06:55', '11:55', '12:55', '16:55'],
+                ['06:55', '11:55', '12:55', '16:55'], ['06:55', '11:55', '12:55', '16:55'],
+                ['06:55', '11:55', '12:55', '15:55'], null]
+        },
         'sem44_8h48': { rotulo: '44h por semana — 8h48 de segunda a sexta', dias: [0, 528, 528, 528, 528, 528, 0] },
         'sem44_sab': { rotulo: '44h por semana — 8h de segunda a sexta e 4h no sábado', dias: [0, 480, 480, 480, 480, 480, 240] },
         'sem40': { rotulo: '40h por semana — 8h de segunda a sexta', dias: [0, 480, 480, 480, 480, 480, 0] },
         'sem36': { rotulo: '36h por semana — 7h12 de segunda a sexta', dias: [0, 432, 432, 432, 432, 432, 0] },
         'sem30': { rotulo: '30h por semana — 6h de segunda a sexta', dias: [0, 360, 360, 360, 360, 360, 0] }
     };
+
+    /* CLT art. 58, par. 1: ate 5 minutos por marcacao, no maximo 10 minutos no dia */
+    var TOLERANCIA_PADRAO = { porMarcacao: 5, porDia: 10 };
+
+    /*
+     * HORA FECHADA (saldo depois da tolerancia legal), ao lado do saldo bruto
+     * (HORAS PRATICAS, campo saldo, que nao muda):
+     *  - dia PARA CONFERIR: null (fora da soma);
+     *  - dia sem jornada prevista (fim de semana, feriado) ou falta: igual ao bruto;
+     *  - escala sem horarios previstos: null, fechadaIndisponivel = true;
+     *  - dia util com as batidas da jornada: se toda batida variou ate 5 min do
+     *    horario previsto e a soma das variacoes e de ate 10 min, zero; senao, o
+     *    bruto inteiro (Sumula 366 do TST: nao se abate a tolerancia).
+     */
+    function aplicarHoraFechada(dia, previstos, tolerancia) {
+        dia.variacoes = [];
+        dia.toleranciaAplicada = false;
+        dia.fechadaIndisponivel = false;
+        if (dia.statusSaldo === 'pendente') { dia.saldoFechado = null; return; }
+        if (dia.jornadaEsperada === 0 || dia.quantidade === 0) { dia.saldoFechado = dia.saldo; return; }
+        if (!previstos) { dia.saldoFechado = null; dia.fechadaIndisponivel = true; return; }
+        var soma = 0;
+        var dentro = true;
+        for (var i = 0; i < previstos.length; i++) {
+            var v = Math.abs(minutosDoDia(dia.horarios[i]) - minutosDoDia(previstos[i]));
+            dia.variacoes.push(v);
+            soma += v;
+            if (v > tolerancia.porMarcacao) { dentro = false; }
+        }
+        if (soma > tolerancia.porDia) { dentro = false; }
+        dia.toleranciaAplicada = dentro && dia.saldo !== 0;
+        dia.saldoFechado = dentro ? 0 : dia.saldo;
+    }
+
+    /*
+     * Alertas de jornada (nao mudam o saldo, so chamam a atencao):
+     * mais de 12h no dia, intervalo intrajornada curto (CLT art. 71) e
+     * descanso entre jornadas menor que 11h (CLT art. 66).
+     */
+    function alertasDoDia(dia, anterior) {
+        var alertas = [];
+        if (!dia.quantidade || dia.impar) { return alertas; }
+        if (dia.totalMinutos > 720) { alertas.push('MAIS DE 12H TRABALHADAS NO DIA'); }
+        var maiorIntervalo = 0;
+        for (var i = 1; i + 1 < dia.horarios.length; i += 2) {
+            var intervalo = minutosDoDia(dia.horarios[i + 1]) - minutosDoDia(dia.horarios[i]);
+            if (intervalo > maiorIntervalo) { maiorIntervalo = intervalo; }
+        }
+        if (dia.totalMinutos > 360) {
+            if (dia.horarios.length === 2) {
+                alertas.push('SEM INTERVALO REGISTRADO EM JORNADA DE MAIS DE 6H (CLT art. 71)');
+            } else if (maiorIntervalo < 60) {
+                alertas.push('INTERVALO MENOR QUE 1H EM JORNADA DE MAIS DE 6H (CLT art. 71)');
+            }
+        } else if (dia.totalMinutos > 240 && dia.horarios.length > 2 && maiorIntervalo < 15) {
+            alertas.push('INTERVALO MENOR QUE 15 MIN EM JORNADA DE 4H A 6H (CLT art. 71)');
+        }
+        if (anterior && anterior.minutos !== null) {
+            var a = dataParaUTC(anterior.data);
+            var b = dataParaUTC(dia.data);
+            var dias = a && b ? Math.round((b - a) / 86400000) : 99;
+            var descanso = dias * 1440 - anterior.minutos + minutosDoDia(dia.horarios[0]);
+            if (dias <= 1 && descanso < 660) {
+                alertas.push('DESCANSO ENTRE JORNADAS MENOR QUE 11H (CLT art. 66)');
+            }
+        }
+        return alertas;
+    }
 
     function somaDaEscala(dias) {
         return (dias || []).reduce(function (t, m) { return t + (Number(m) || 0); }, 0);
@@ -1457,7 +1736,22 @@
         var pessoas = mapaVazio();
         var semanas = mapaVazio();
         var meses = mapaVazio();
-        var total = { dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0 };
+        var total = novoBalde();
+
+        /* horarios previstos por dia da semana: opcoes.horarios ou os da escala pronta */
+        var horarios = null;
+        if (opcoes.horarios && opcoes.horarios.length === 7) {
+            horarios = opcoes.horarios;
+        } else if (typeof opcoes.escala === 'string' && ESCALAS[opcoes.escala] && ESCALAS[opcoes.escala].horarios) {
+            horarios = ESCALAS[opcoes.escala].horarios;
+        }
+        var tolerancia = opcoes.tolerancia || TOLERANCIA_PADRAO;
+        var comCalendario = !!opcoes.calendario;
+
+        function novoBalde() {
+            return { dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0,
+                saldoFechado: 0, pendentes: 0, semFechada: 0 };
+        }
 
         function acumular(alvo, dia) {
             if (dia.tipo === 'falta') {
@@ -1471,33 +1765,72 @@
             alvo.minutos += dia.totalMinutos;
             alvo.esperado += dia.jornadaEsperada;
             alvo.saldo += dia.saldo;
+            if (dia.statusSaldo === 'pendente') {
+                alvo.pendentes = (alvo.pendentes || 0) + 1;
+            } else if (dia.saldoFechado == null) {
+                alvo.semFechada = (alvo.semFechada || 0) + 1;
+            } else {
+                alvo.saldoFechado = (alvo.saldoFechado || 0) + dia.saldoFechado;
+            }
         }
 
         function balde(mapa, chave, extra) {
             if (!mapa[chave]) {
-                mapa[chave] = { chave: chave, dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0 };
+                mapa[chave] = novoBalde();
+                mapa[chave].chave = chave;
                 if (extra) { Object.keys(extra).forEach(function (k) { mapa[chave][k] = extra[k]; }); }
             }
             return mapa[chave];
         }
 
-        espelho.forEach(function (dia) {
+        var ultimaSaida = mapaVazio();
+        var ordenados = espelho.slice().sort(function (a, b) {
+            if (a.chave !== b.chave) { return a.chave < b.chave ? -1 : 1; }
+            return a.data < b.data ? -1 : (a.data > b.data ? 1 : 0);
+        });
+
+        ordenados.forEach(function (dia) {
             var info = infoData(dia.data);
+            var cal = comCalendario ? diaDoCalendario(dia.data, opcoes.feriadosLocais) : (dia.calendario || null);
+            var feriado = !!cal && cal.tipo === 'feriado';
+            if (comCalendario) { dia.calendario = cal; }
             if (escala) {
                 dia.jornadaEsperada = info.valida ? escala[info.dow] : jornada;
             } else {
                 dia.jornadaEsperada = (soUteis && (info.dow === 0 || info.dow === 6)) ? 0 : jornada;
             }
+            if (feriado) {
+                dia.jornadaEsperada = 0;
+                if (dia.quantidade > 0 && dia.tipo !== 'falta' && dia.tipo !== 'folga') {
+                    dia.tipo = 'extra';
+                    dia.etiqueta = 'HORA EXTRA FERIADO';
+                }
+            }
             dia.saldo = dia.totalMinutos - dia.jornadaEsperada;
             dia.chaveSemana = info.semana;
             dia.chaveMes = info.mes;
 
+            /* PARA CONFERIR: pendencias do espelho mais a quantidade de batidas fora da jornada */
+            var previstos = horarios && info.valida ? horarios[info.dow] : null;
+            var pendencias = (dia.pendencias || []).slice();
+            if (previstos && dia.jornadaEsperada > 0 && dia.quantidade > 0 && !pendencias.length &&
+                    dia.quantidade !== previstos.length) {
+                pendencias.push('QUANTIDADE DE MARCAÇÕES DIFERENTE DA JORNADA (' + dia.quantidade + ' de ' + previstos.length + ')');
+            }
+            dia.pendencias = pendencias;
+            dia.statusSaldo = pendencias.length ? 'pendente' : 'ok';
+            aplicarHoraFechada(dia, previstos, tolerancia);
+            dia.alertas = alertasDoDia(dia, ultimaSaida[dia.chave]);
+            if (dia.quantidade > 0 && !dia.impar) {
+                ultimaSaida[dia.chave] = { data: dia.data, minutos: minutosDoDia(dia.horarios[dia.horarios.length - 1]) };
+            }
+
             var p = pessoas[dia.chave];
             if (!p) {
-                p = pessoas[dia.chave] = {
-                    chave: dia.chave, dias: 0, faltas: 0, folgas: 0, extras: 0, minutos: 0, esperado: 0, saldo: 0,
-                    semanas: {}, meses: {}
-                };
+                p = pessoas[dia.chave] = novoBalde();
+                p.chave = dia.chave;
+                p.semanas = {};
+                p.meses = {};
             }
             acumular(p, dia);
             acumular(balde(p.semanas, dia.chaveSemana, { inicio: dia.chaveSemana, fim: info.fimSemana }), dia);
@@ -1676,6 +2009,13 @@
         ESCALAS: ESCALAS,
         somaDaEscala: somaDaEscala,
         lerListaDeNomes: lerListaDeNomes,
+        VERSAO: VERSAO,
+        sha256: sha256,
+        celulaPlanilha: celulaPlanilha,
+        pascoa: pascoa,
+        diaDoCalendario: diaDoCalendario,
+        dataIsoValida: dataIsoValida,
+        TOLERANCIA_PADRAO: TOLERANCIA_PADRAO,
         lerListaDeEmpresas: lerListaDeEmpresas,
         normalizarListaDeNomes: normalizarListaDeNomes,
         validarCPF: validarCPF,

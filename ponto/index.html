@@ -760,6 +760,29 @@ tbody tr.linha-grupo:hover { background: var(--faixa-bg); }
     .filtros-acoes { margin-left: 0; width: 100%; }
 }
 
+/* Horas praticas x hora fechada, calendario e dias para conferir */
+.saldos-dia { display: flex; gap: 22px; align-items: flex-start; }
+.saldos-dia .saldo-dia { padding-left: 0; }
+.saldos-dia .saldo-dia .valor { font-size: 1.3rem; }
+.nota-tolerancia { display: block; font-size: 0.7rem; color: var(--info); margin-top: 2px; }
+.fichas-e-avisos { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.motivos-dia { font-size: 0.8rem; color: var(--erro); font-weight: 600; }
+.alertas-dia { font-size: 0.78rem; color: var(--info); }
+.fora-soma { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
+.dia-faixa.pendente { box-shadow: inset 4px 0 0 var(--erro); }
+.tarja-cal { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 4px; font-size: 0.72rem;
+    font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+.tarja-cal.feriado { background: #b91c1c; color: #fff; }
+.tarja-cal.facultativo { background: #b45309; color: #fff; }
+.etiqueta-dia.feriado { border: 1px solid #b91c1c; background: rgba(185, 28, 28, .14); color: #ef4444; }
+.etiqueta-dia.facultativo { border: 1px solid #b45309; background: rgba(180, 83, 9, .14); color: #f59e0b; }
+.legenda-horas { margin: 0 0 12px; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
+.legenda-horas b { color: var(--text-color); }
+@media (max-width: 640px) {
+    .saldos-dia { gap: 12px; }
+    .saldos-dia .saldo-dia .valor { font-size: 1.05rem; }
+}
+
 @media print {
     body { padding: 0; background: #fff; color: #000; }
     .topo-acoes, .zona, .filtros-acoes, .abas, .paginacao, .btn { display: none !important; }

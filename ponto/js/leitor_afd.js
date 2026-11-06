@@ -35,6 +35,10 @@
         filtros: { busca: '', dataIni: '', dataFim: '', pessoa: '', empresa: '', tipo: '', nivel: '' },
         /* documento -> empresa, para separar quem trabalha em cada empresa do mesmo relogio */
         empresasLista: null,
+        /* carga em andamento e quem espera por ela (API LeitorAFD.carregar) */
+        carga: 0,
+        esperas: {},
+        hashArquivo: '',
         empresasCnpj: {},
         versaoEmpresas: 0
     };
@@ -89,15 +93,38 @@
     function escalaEmVigor() {
         if (estado.escalaTipo === 'diaria') {
             var m = estado.jornadaMinutos;
-            return [m, m, m, m, m, m, m];
+            return [0, m, m, m, m, m, 0];
         }
         if (estado.escalaTipo === 'custom') { return estado.escalaCustom.slice(); }
         var pronta = AFD.ESCALAS[estado.escalaTipo];
         return pronta ? pronta.dias.slice() : AFD.ESCALAS.sem44_9h_sex8h.dias.slice();
     }
 
+    /* horarios previstos de cada batida (so a escala pronta que os tem); base da HORA FECHADA */
+    function horariosEmVigor() {
+        var pronta = AFD.ESCALAS[estado.escalaTipo];
+        return pronta && pronta.horarios ? pronta.horarios : null;
+    }
+
+    function feriadosLocais() { return window.LEITOR_AFD_FERIADOS_LOCAIS || null; }
+
     function opcoesSaldo() {
-        return { escala: escalaEmVigor() };
+        return { escala: escalaEmVigor(), horarios: horariosEmVigor(), calendario: true, feriadosLocais: feriadosLocais() };
+    }
+
+    /* dias com ajuste do relogio (tipo 4): o pareamento pode ter trocado */
+    function datasDeAjuste(resultado) {
+        var datas = {};
+        (resultado.ajustes || []).forEach(function (a) {
+            if (a.dataAntes) { datas[a.dataAntes] = true; }
+            if (a.dataDepois) { datas[a.dataDepois] = true; }
+        });
+        return datas;
+    }
+
+    function montarEspelhoAtual() {
+        var r = estado.resultado;
+        return AFD.montarEspelho(r.marcacoes, r.pessoas, { datasAjuste: datasDeAjuste(r) });
     }
 
     function classeSaldo(minutos) {
@@ -108,6 +135,32 @@
 
     function saldoHTML(minutos) {
         return '<span class="' + classeSaldo(minutos) + '">' + esc(AFD.formatarSaldo(minutos)) + '</span>';
+    }
+
+    /* HORA FECHADA de um dia: valor, ou "—" quando o dia esta PARA CONFERIR ou a escala nao tem horarios */
+    function fechadaDiaHTML(d) {
+        if (d.saldoFechado == null) {
+            var motivo = d.statusSaldo === 'pendente' ? 'Dia para conferir: fora da soma da hora fechada'
+                : 'A escala escolhida não tem horários previstos por batida';
+            return '<span class="neutro" title="' + esc(motivo) + '">—</span>';
+        }
+        return saldoHTML(d.saldoFechado);
+    }
+
+    /* soma da HORA FECHADA de um periodo, com os dias que ficaram de fora */
+    function fechadaTotalHTML(b) {
+        var fora = [];
+        if (b.pendentes) { fora.push(numeroBR(b.pendentes) + ' para conferir'); }
+        if (b.semFechada) { fora.push(numeroBR(b.semFechada) + ' sem horário previsto'); }
+        return saldoHTML(b.saldoFechado || 0) + (fora.length ? ' <small class="fora-soma">(' + esc(fora.join(', ')) + ' fora da soma)</small>' : '');
+    }
+
+    /* tarja do calendario na faixa do dia */
+    function tarjaCalendario(d) {
+        if (!d.calendario) { return ''; }
+        var feriado = d.calendario.tipo === 'feriado';
+        return '<span class="tarja-cal ' + (feriado ? 'feriado' : 'facultativo') + '">' +
+            (feriado ? 'FERIADO' : 'PONTO FACULTATIVO') + ' · ' + esc(d.calendario.nome) + '</span>';
     }
 
     function debounce(fn, ms) {
@@ -184,24 +237,49 @@
         }
     }
 
+    /*
+     * Cada carga recebe um numero; so a ultima pode terminar e desenhar a tela.
+     * Assim um arquivo grande escolhido antes nao sobrescreve o que veio depois.
+     */
+    function novaCarga() {
+        estado.carga = (estado.carga || 0) + 1;
+        Object.keys(estado.esperas).forEach(function (k) {
+            if (Number(k) < estado.carga) {
+                estado.esperas[k].reject(new Error('Carga substituída por outra mais recente.'));
+                delete estado.esperas[k];
+            }
+        });
+        return estado.carga;
+    }
+
     function carregarArquivo(arquivo) {
         if (!arquivo) { return; }
+        var carga = novaCarga();
         mostrarAviso('');
-        estado.nomeArquivo = arquivo.name;
-        estado.tamanhoArquivo = arquivo.size;
         var leitor = new FileReader();
-        leitor.onerror = function () { mostrarAviso('Não foi possível ler o arquivo selecionado.'); };
+        leitor.onerror = function () {
+            if (carga === estado.carga) { mostrarAviso('Não foi possível ler o arquivo selecionado.'); }
+        };
         leitor.onload = function () {
+            if (carga !== estado.carga) { return; }
+            estado.nomeArquivo = arquivo.name;
+            estado.tamanhoArquivo = arquivo.size;
+            estado.hashArquivo = AFD.sha256(new Uint8Array(leitor.result));
             var d = decodificar(leitor.result);
             estado.codificacao = d.codificacao;
-            analisar(d.texto);
+            analisar(d.texto, carga);
         };
         leitor.readAsArrayBuffer(arquivo);
     }
 
-    function analisar(texto) {
+    function analisar(texto, carga) {
+        carga = carga || novaCarga();
         if (!texto || !texto.trim()) {
             mostrarAviso('O conteúdo informado está vazio.');
+            if (estado.esperas[carga]) {
+                estado.esperas[carga].reject(new Error('O conteúdo informado está vazio.'));
+                delete estado.esperas[carga];
+            }
             return;
         }
         var linhas = AFD.separarLinhas(texto);
@@ -214,6 +292,7 @@
         $('progressoTexto').textContent = 'Lendo ' + numeroBR(linhas.length) + ' linha(s)...';
 
         function passo() {
+            if (carga !== estado.carga) { return; }
             var fim = Math.min(i + LOTE, linhas.length);
             an.processar(linhas.slice(i, fim));
             i = fim;
@@ -221,7 +300,7 @@
             if (i < linhas.length) {
                 setTimeout(passo, 0);
             } else {
-                setTimeout(function () { concluir(an.finalizar()); }, 0);
+                setTimeout(function () { if (carga === estado.carga) { concluir(an.finalizar(), carga); } }, 0);
             }
         }
         setTimeout(passo, 0);
@@ -262,7 +341,7 @@
             return AFD.compararTexto(a.nome || '\uFFFF', b.nome || '\uFFFF');
         });
         estado._mapaNomes = null;
-        estado.espelho = AFD.montarEspelho(estado.resultado.marcacoes, estado.resultado.pessoas);
+        estado.espelho = montarEspelhoAtual();
         estado.versaoEspelho += 1;
         return casados;
     }
@@ -288,28 +367,33 @@
         var leitor = new FileReader();
         leitor.onerror = function () { mostrarAviso('Não foi possível ler a lista de nomes.'); };
         leitor.onload = function () {
-            var d = decodificar(leitor.result);
-            var lista = AFD.lerListaDeNomes(d.texto);
-            if (!lista.total) {
-                mostrarAviso('Nenhum nome reconhecido na lista. O arquivo precisa ter uma coluna de documento ' +
-                    '(PIS ou CPF) e uma de nome, separadas por ponto e vírgula, vírgula ou tabulação.');
-                return;
-            }
-            mostrarAviso('');
-            estado.nomesArquivo = lista.nomes;
-            estado.nomesInfo = {
-                total: Object.keys(nomesEmVigor() || {}).length,
-                casados: 0, origem: 'arquivo', arquivo: arquivo.name
-            };
-            estado.nomesInfo.casados = aplicarNomes();
-            mostrarEstadoNomes();
-            if (estado.resultado) {
-                desenharCartoes();
-                desenharAbas();
-                desenharConteudo();
-            }
+            aplicarTextoDeNomes(decodificar(leitor.result).texto, arquivo.name, true);
         };
         leitor.readAsArrayBuffer(arquivo);
+    }
+
+    /* aplica uma lista de nomes em texto; redesenha se ja houver arquivo aberto */
+    function aplicarTextoDeNomes(texto, nomeArquivo, redesenhar) {
+        var lista = AFD.lerListaDeNomes(texto);
+        if (!lista.total) {
+            mostrarAviso('Nenhum nome reconhecido na lista. O arquivo precisa ter uma coluna de documento ' +
+                '(PIS ou CPF) e uma de nome, separadas por ponto e vírgula, vírgula ou tabulação.');
+            return false;
+        }
+        mostrarAviso('');
+        estado.nomesArquivo = lista.nomes;
+        estado.nomesInfo = {
+            total: Object.keys(nomesEmVigor() || {}).length,
+            casados: 0, origem: 'arquivo', arquivo: nomeArquivo
+        };
+        estado.nomesInfo.casados = aplicarNomes();
+        mostrarEstadoNomes();
+        if (redesenhar && estado.resultado) {
+            desenharCartoes();
+            desenharAbas();
+            desenharConteudo();
+        }
+        return true;
     }
 
     function descartarNomes() {
@@ -417,10 +501,12 @@
         aplicarEmpresas();
     }
 
-    function concluir(resultado) {
+    function concluir(resultado, carga) {
+        var espera = estado.esperas[carga];
+        delete estado.esperas[carga];
         $('progresso').style.display = 'none';
         estado.resultado = resultado;
-        estado.espelho = AFD.montarEspelho(resultado.marcacoes, resultado.pessoas);
+        estado.espelho = montarEspelhoAtual();
         estado.versaoEspelho += 1;
         estado._mapaNomes = null;
         if (estado.nomesInfo) {
@@ -432,6 +518,10 @@
         estado.pagina = {};
         estado.ordem = {};
         estado.filtros = { busca: '', dataIni: '', dataFim: '', pessoa: '', empresa: '', tipo: '', nivel: '' };
+        if (espera && espera.periodo) {
+            estado.filtros.dataIni = espera.periodo.inicio || '';
+            estado.filtros.dataFim = espera.periodo.fim || '';
+        }
         estado.aba = 'espelho';
 
         if (resultado.layout === 'desconhecido') {
@@ -449,6 +539,14 @@
         desenharCartoes();
         desenharAbas();
         desenharConteudo();
+
+        if (espera) {
+            espera.resolve({
+                trabalhadores: resultado.pessoas.length,
+                marcacoes: resultado.marcacoes.length,
+                periodo: { inicio: estado.filtros.dataIni, fim: estado.filtros.dataFim }
+            });
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -638,7 +736,7 @@
                     esc(AFD.ESCALAS[k].rotulo) + '</option>';
             }).join('');
             opcoesEscala += '<option value="diaria"' + (estado.escalaTipo === 'diaria' ? ' selected' : '') +
-                '>Mesma jornada em todo dia com marcação</option>';
+                '>Mesma jornada de segunda a sexta</option>';
             opcoesEscala += '<option value="custom"' + (estado.escalaTipo === 'custom' ? ' selected' : '') +
                 '>Personalizada por dia da semana</option>';
 
@@ -892,7 +990,12 @@
         switch (estado.aba) {
         case 'resumo': html = abaResumo(); break;
         case 'marcacoes': html = barraFiltros({ datas: true, pessoas: true, tipos: true }) + '<div id="areaTabela"></div>'; break;
-        case 'espelho': html = barraFiltros({ datas: true, empresas: true, pessoas: true, visao: true, jornada: true }) + '<div id="areaTabela"></div>'; break;
+        case 'espelho': html = barraFiltros({ datas: true, empresas: true, pessoas: true, visao: true, jornada: true }) +
+            '<p class="legenda-horas"><b>Horas práticas</b>: minuto a minuto do relógio, sem nenhum abono. ' +
+            '<b>Hora fechada</b>: depois da tolerância de até 5 minutos por batida e 10 minutos no dia (CLT art. 58, §1º); ' +
+            'passando disso, vale a diferença inteira. Feriado nacional não tem jornada prevista; ponto facultativo é dia normal. ' +
+            'Dia <b>para conferir</b> (batida ímpar, repetida, inválida ou com ajuste do relógio) fica fora da hora fechada até alguém conferir.</p>' +
+            '<div id="areaTabela"></div>'; break;
         case 'pessoas': html = barraFiltros({ placeholder: 'Nome ou documento...' }) + '<div id="areaTabela"></div>'; break;
         case 'empresa': html = abaEmpresa(); break;
         case 'eventos': html = barraFiltros({ datas: true, exportar: true }) + '<div id="areaTabela"></div>'; break;
@@ -1037,8 +1140,11 @@
                 return esc(nomes[m.chave] || '—');
             } },
             { titulo: 'Verificação', classe: 'mono', celula: function (m) {
-                if (m.hash) { return '<span title="' + esc(m.hash) + '">hash ' + esc(m.hash.slice(0, 12)) + '…</span>'; }
-                if (m.crc) { return 'CRC ' + esc(m.crc); }
+                if (m.hash) {
+                    return '<span title="' + esc(m.hash) + ' — lido do arquivo, não verificado">hash ' +
+                        esc(m.hash.slice(0, 12)) + '… (não verificado)</span>';
+                }
+                if (m.crc) { return '<span title="CRC lido do arquivo; esta ferramenta não recalcula o CRC">CRC ' + esc(m.crc) + ' (não verificado)</span>'; }
                 return '—';
             } },
             { titulo: 'Linha', classe: 'num', valor: function (m) { return m.numeroLinha; }, celula: function (m) {
@@ -1083,7 +1189,9 @@
                 escala: escalaEmVigor(),
                 inicio: f.dataIni || res.periodoDeclarado.inicio || res.periodoReal.inicio,
                 fim: f.dataFim || res.periodoDeclarado.fim || res.periodoReal.fim,
-                todoPeriodo: estado.faltas === 'arquivo'
+                todoPeriodo: estado.faltas === 'arquivo',
+                calendario: true,
+                feriadosLocais: feriadosLocais()
             });
         }
 
@@ -1148,8 +1256,13 @@
         ];
         if (balde.faltas) { metricas.push(metrica('Faltas', '<span class="negativo">' + numeroBR(balde.faltas) + '</span>')); }
         if (balde.extras) { metricas.push(metrica('Dias extras', numeroBR(balde.extras))); }
-        metricas.push(metrica('Saldo', '<span class="' + sinal + '">' + esc(AFD.formatarSaldo(balde.saldo)) + '</span>',
+        if (balde.pendentes) {
+            metricas.push(metrica('Para conferir', '<span class="negativo">' + numeroBR(balde.pendentes) + '</span>'));
+        }
+        metricas.push(metrica('Horas práticas', '<span class="' + sinal + '">' + esc(AFD.formatarSaldo(balde.saldo)) + '</span>',
             'destaque ' + sinal));
+        var sinalFechada = classeSaldo(balde.saldoFechado || 0);
+        metricas.push(metrica('Hora fechada', fechadaTotalHTML(balde), 'destaque ' + sinalFechada));
 
         return '<div class="fechamento ' + classe + '">' +
             '<div class="fechamento-topo">' +
@@ -1195,8 +1308,9 @@
                       esc(g.nome) + '</span>'
                     : '<span class="sem-nome">nome não informado no arquivo</span>') +
                 (mostrarEmpresa ? '<span class="etiqueta neutra" title="Empresa">' + esc(empresaDe(chave)) + '</span>' : '') +
-                '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · saldo ' +
-                saldoHTML(saldos.pessoas[chave].saldo) + '</span>' +
+                '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · horas práticas ' +
+                saldoHTML(saldos.pessoas[chave].saldo) + ' · hora fechada ' +
+                fechadaTotalHTML(saldos.pessoas[chave]) + '</span>' +
                 '</header>');
 
             var pessoa = saldos.pessoas[chave];
@@ -1237,15 +1351,18 @@
                         ' de ' + esc(AFD.formatarMinutos(d.jornadaEsperada));
                 }
 
-                html.push('<div class="dia-faixa ' + tipo + '">' +
+                var pendente = d.statusSaldo === 'pendente';
+                html.push('<div class="dia-faixa ' + tipo + (pendente ? ' pendente' : '') + '">' +
                     '<i class="fas fa-calendar-days"></i>' +
                     '<span>' + esc(AFD.formatarDataBR(d.data)) + '</span>' +
                     '<span class="dia-semana">' + esc(d.diaSemana) + '</span>' +
-                    (d.impar ? '<span class="etiqueta alerta">marcação ímpar</span>' : '') +
+                    tarjaCalendario(d) +
+                    (pendente ? '<span class="etiqueta erro">PARA CONFERIR</span>' : '') +
                     '<span class="dia-total">' + resumoDia + '</span></div>');
 
+                var feriadoVazio = d.calendario && d.calendario.tipo === 'feriado' && !d.quantidade;
                 var etiquetaDia = d.etiqueta
-                    ? '<span class="etiqueta-dia ' + tipo + '">' +
+                    ? '<span class="etiqueta-dia ' + tipo + (feriadoVazio ? ' feriado' : '') + '">' +
                       '<i class="fas ' + (tipo === 'falta' ? 'fa-user-xmark'
                           : (tipo === 'extra' ? 'fa-clock-rotate-left' : 'fa-mug-hot')) + '"></i> ' +
                       esc(d.etiqueta) + '</span>'
@@ -1257,13 +1374,27 @@
                     return '<span class="ficha-hora' + (semPar ? ' sem-par' : '') + '"' +
                         (nsr ? ' title="NSR ' + esc(nsr) + (semPar ? ' — sem par no dia' : '') + '"' : '') + '>' +
                         '<i class="fas fa-clock"></i>' + esc(h.slice(0, 5)) + '</span>';
-                }).join('') + etiquetaDia;
+                }).join('') + etiquetaDia +
+                    (d.calendario && d.calendario.tipo === 'facultativo'
+                        ? '<span class="etiqueta-dia facultativo"><i class="fas fa-flag"></i> PONTO FACULTATIVO</span>' : '');
+                var avisos = '';
+                if (pendente) {
+                    avisos += '<div class="motivos-dia"><i class="fas fa-triangle-exclamation"></i> Para conferir: ' +
+                        esc(d.pendencias.join(' · ')) + '</div>';
+                }
+                if (d.alertas && d.alertas.length) {
+                    avisos += '<div class="alertas-dia"><i class="fas fa-circle-info"></i> ' + esc(d.alertas.join(' · ')) + '</div>';
+                }
 
                 html.push('<div class="dia-horas">' +
-                    '<div class="fichas">' + fichas + '</div>' +
-                    '<div class="saldo-dia"><span class="rotulo">Saldo de horas</span>' +
-                    '<span class="valor ' + classeSaldo(d.saldo) + '">' + esc(AFD.formatarSaldo(d.saldo)) + '</span>' +
-                    '</div></div>');
+                    '<div class="fichas-e-avisos"><div class="fichas">' + fichas + '</div>' + avisos + '</div>' +
+                    '<div class="saldos-dia">' +
+                    '<div class="saldo-dia"><span class="rotulo">Horas práticas</span>' +
+                    '<span class="valor ' + classeSaldo(d.saldo) + '">' + esc(AFD.formatarSaldo(d.saldo)) + '</span></div>' +
+                    '<div class="saldo-dia"><span class="rotulo">Hora fechada</span>' +
+                    '<span class="valor">' + fechadaDiaHTML(d) + '</span>' +
+                    (d.toleranciaAplicada ? '<span class="nota-tolerancia">tolerância aplicada</span>' : '') +
+                    '</div></div></div>');
             });
 
             fecharSemana();
@@ -1295,14 +1426,24 @@
             } },
             { titulo: 'Qtde.', classe: 'num', valor: function (e) { return e.quantidade; }, celula: function (e) { return numeroBR(e.quantidade); } },
             { titulo: 'Total trabalhado', classe: 'num mono', valor: function (e) { return e.totalMinutos; }, celula: function (e) { return esc(e.total); } },
-            { titulo: 'Saldo', classe: 'num mono', valor: function (e) { return e.saldo; }, celula: function (e) { return saldoHTML(e.saldo); } },
+            { titulo: 'Horas práticas', classe: 'num mono', valor: function (e) { return e.saldo; }, celula: function (e) { return saldoHTML(e.saldo); } },
+            { titulo: 'Hora fechada', classe: 'num mono', valor: function (e) { return e.saldoFechado == null ? -1e9 : e.saldoFechado; }, celula: fechadaDiaHTML },
             { titulo: 'Situação', celula: function (e) {
-                if (e.tipo === 'falta') { return '<span class="etiqueta erro">falta em dia útil</span>'; }
-                if (e.tipo === 'folga') { return '<span class="etiqueta neutra">sem jornada prevista</span>'; }
-                if (e.tipo === 'extra') { return '<span class="etiqueta alerta">hora extra</span>'; }
-                return e.impar
-                    ? '<span class="etiqueta alerta">marcação ímpar</span>'
-                    : '<span class="etiqueta ok">pares completos</span>';
+                var selos = [];
+                if (e.statusSaldo === 'pendente') {
+                    selos.push('<span class="etiqueta erro" title="' + esc(e.pendencias.join(' · ')) + '">para conferir</span>');
+                }
+                if (e.calendario) {
+                    selos.push('<span class="etiqueta ' + (e.calendario.tipo === 'feriado' ? 'erro' : 'alerta') + '">' +
+                        (e.calendario.tipo === 'feriado' ? 'feriado' : 'ponto facultativo') + ' · ' + esc(e.calendario.nome) + '</span>');
+                }
+                if (e.tipo === 'falta') { selos.push('<span class="etiqueta erro">falta em dia útil</span>'); }
+                else if (e.tipo === 'folga') { selos.push('<span class="etiqueta neutra">sem jornada prevista</span>'); }
+                else if (e.tipo === 'extra') { selos.push('<span class="etiqueta alerta">hora extra</span>'); }
+                if (e.toleranciaAplicada) { selos.push('<span class="etiqueta info">tolerância aplicada</span>'); }
+                (e.alertas || []).forEach(function (a) { selos.push('<span class="etiqueta info">' + esc(a) + '</span>'); });
+                if (!selos.length) { selos.push('<span class="etiqueta ok">pares completos</span>'); }
+                return selos.join(' ');
             } }
         ];
         return tabela('espelho', colunas, linhas, {
@@ -1315,8 +1456,9 @@
                         '<span class="rotulo-grupo">' + esc(g.tipo || 'Documento') + '</span>' +
                         '<span class="doc-grupo">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
                         '<span class="nome-grupo">' + esc(g.nome || 'sem cadastro no arquivo') + '</span>' +
-                        '<span class="resumo-grupo">' + resumoDoGrupo(g) + ' · saldo ' +
-                        saldoHTML(saldos.pessoas[e.chave].saldo) + '</span>'
+                        '<span class="resumo-grupo">' + resumoDoGrupo(g) + ' · horas práticas ' +
+                        saldoHTML(saldos.pessoas[e.chave].saldo) + ' · hora fechada ' +
+                        fechadaTotalHTML(saldos.pessoas[e.chave]) + '</span>'
                 };
             }
         });
@@ -1480,7 +1622,11 @@
                 return '<span class="clicavel" data-detalhe="' + r.numeroLinha + '">' + esc(t) + '</span>';
             } }
         ];
-        return tabela('arquivo', colunas, registrosFiltrados(), { vazio: 'Nenhuma linha para os filtros aplicados.' });
+        var aviso = estado.mascarar
+            ? '<p class="legenda-horas"><b>Atenção:</b> "Ocultar documentos" não se aplica à linha bruta do arquivo. ' +
+              'CPF e PIS aparecem completos aqui e no detalhe de cada linha.</p>'
+            : '';
+        return aviso + tabela('arquivo', colunas, registrosFiltrados(), { vazio: 'Nenhuma linha para os filtros aplicados.' });
     }
 
     /* ------------------------------------------------------------------ *
@@ -1507,6 +1653,10 @@
         $('modalTitulo').textContent = 'Linha ' + numeroBR(r.numeroLinha) + ' — tipo ' + r.tipo +
             ' (' + (r.tipoDescricao || '') + ')';
         $('modalCorpo').innerHTML =
+            (estado.mascarar
+                ? '<p class="legenda-horas"><b>Atenção:</b> a linha bruta mostra os documentos completos; ' +
+                  '"Ocultar documentos" não se aplica aqui.</p>'
+                : '') +
             '<div class="linha-bruta">' + esc(r.linha) + '</div>' +
             '<div class="rolagem"><table><thead><tr><th>Campo</th><th>Posição</th><th>Conteúdo</th></tr></thead>' +
             '<tbody>' + (campos + trailer || '<tr><td colspan="3">Registro sem campos reconhecidos.</td></tr>') +
@@ -1541,14 +1691,16 @@
             AFD.calcularSaldos(diasEspelho, opcoesSaldo());
             return {
                 nome: 'espelho_de_ponto',
-                cabecalho: ['Trabalhador', 'Documento', 'Data', 'Dia da semana', 'Marcacoes', 'Qtde',
-                    'Total trabalhado', 'Jornada esperada', 'Saldo', 'Situacao'],
+                cabecalho: ['Empresa', 'Trabalhador', 'Documento', 'Data', 'Dia da semana', 'Marcacoes', 'Qtde',
+                    'Total trabalhado', 'Jornada esperada', 'Horas praticas', 'Hora fechada', 'Situacao',
+                    'Para conferir', 'Alertas'],
                 linhas: diasEspelho.map(function (e) {
-                    return [e.nome, documento(e.identificador, e.tipoIdentificador), AFD.formatarDataBR(e.data),
+                    return [empresaDe(e.chave), e.nome, documento(e.identificador, e.tipoIdentificador), AFD.formatarDataBR(e.data),
                         e.diaSemana,
                         e.horarios.map(function (h) { return h.slice(0, 5); }).join(' ') || e.etiqueta || '',
                         e.quantidade, e.total, AFD.formatarMinutos(e.jornadaEsperada), AFD.formatarSaldo(e.saldo),
-                        e.etiqueta || (e.impar ? 'Marcacao impar' : 'Pares completos')];
+                        e.saldoFechado == null ? '' : AFD.formatarSaldo(e.saldoFechado),
+                        situacaoTexto(e), (e.pendencias || []).join(' | '), (e.alertas || []).join(' | ')];
                 })
             };
         case 'pessoas':
@@ -1589,9 +1741,20 @@
         }
     }
 
+    /* situacao do dia em texto, para CSV e copia */
+    function situacaoTexto(e) {
+        var partes = [];
+        if (e.statusSaldo === 'pendente') { partes.push('PARA CONFERIR'); }
+        if (e.calendario) { partes.push((e.calendario.tipo === 'feriado' ? 'FERIADO' : 'PONTO FACULTATIVO') + ' - ' + e.calendario.nome); }
+        if (e.etiqueta) { partes.push(e.etiqueta); }
+        if (e.toleranciaAplicada) { partes.push('Tolerancia aplicada'); }
+        if (!partes.length) { partes.push('Pares completos'); }
+        return partes.join(' | ');
+    }
+
     function montarCSV(dados) {
         function campo(v) {
-            var s = String(v == null ? '' : v);
+            var s = AFD.celulaPlanilha(v);
             return '"' + s.replace(/"/g, '""') + '"';
         }
         return [dados.cabecalho].concat(dados.linhas)
@@ -1637,7 +1800,9 @@
         var dados = dadosExportacao();
         if (!dados) { return; }
         var texto = [dados.cabecalho].concat(dados.linhas)
-            .map(function (l) { return l.join('\t'); }).join('\n');
+            .map(function (l) {
+                return l.map(function (v) { return AFD.celulaPlanilha(v).replace(/[\t\r\n]+/g, ' '); }).join('\t');
+            }).join('\n');
         var rotulo = botao.innerHTML;
 
         function aviso() {
@@ -1804,6 +1969,7 @@
         estado.codificacao = 'ASCII';
         var texto = gerarDemonstracao(layout);
         estado.tamanhoArquivo = texto.length;
+        estado.hashArquivo = AFD.sha256(texto);
         mostrarAviso('');
         analisar(texto);
     }
@@ -1848,6 +2014,7 @@
             estado.codificacao = 'texto colado';
             var t = $('textoColado').value;
             estado.tamanhoArquivo = t.length;
+            estado.hashArquivo = AFD.sha256(t);
             analisar(t);
         });
         $('btnNomes').addEventListener('click', function () { $('entradaNomes').click(); });
@@ -2010,6 +2177,31 @@
      * calcularSaldos dos cartões, então o papel bate com a tela.
      */
     window.LeitorAFD = window.LeitorAFD || {};
+
+    /*
+     * Carga por programa (usada pelo download do relogio no desktop):
+     *   LeitorAFD.carregar({ bytes, nomeArquivo, nomes, periodo: { inicio, fim } })
+     * nomes = lista "documento;nome" em texto (opcional). A Promise so resolve
+     * depois que a analise terminou e o periodo foi aplicado nesta mesma carga;
+     * e rejeitada se outra carga comecar antes.
+     */
+    window.LeitorAFD.versaoApi = 1;
+    window.LeitorAFD.carregar = function (o) {
+        return new Promise(function (resolve, reject) {
+            var bytes = o.bytes instanceof Uint8Array ? o.bytes : new Uint8Array(o.bytes || []);
+            if (o.nomes) { aplicarTextoDeNomes(o.nomes, o.nomeLista || 'nomes do relógio', false); }
+            var carga = novaCarga();
+            estado.esperas[carga] = { resolve: resolve, reject: reject, periodo: o.periodo || null };
+            mostrarAviso('');
+            estado.nomeArquivo = o.nomeArquivo || 'afd.txt';
+            estado.tamanhoArquivo = bytes.length;
+            estado.hashArquivo = AFD.sha256(bytes);
+            var d = decodificar(bytes);
+            estado.codificacao = d.codificacao;
+            analisar(d.texto, carga);
+        });
+    };
+
     window.LeitorAFD.dadosDoEspelho = function () {
         if (!estado.resultado) { return null; }
         var linhas = espelhoFiltrado();
@@ -2019,7 +2211,7 @@
         var pronta = AFD.ESCALAS[estado.escalaTipo];
         var rotuloEscala = pronta ? pronta.rotulo
             : (estado.escalaTipo === 'diaria'
-                ? 'Mesma jornada em todo dia com marcação (' + AFD.formatarMinutos(estado.jornadaMinutos) + ')'
+                ? 'Mesma jornada de segunda a sexta (' + AFD.formatarMinutos(estado.jornadaMinutos) + ')'
                 : 'Personalizada por dia da semana');
         return {
             ordem: agrupado.ordem,
@@ -2034,6 +2226,8 @@
             },
             escala: { rotulo: rotuloEscala, dias: escalaEmVigor() },
             documento: documento,
+            hashArquivo: estado.hashArquivo,
+            versao: AFD.VERSAO + (window.LEITOR_AFD_MONTAGEM ? ' · ' + window.LEITOR_AFD_MONTAGEM : ''),
             empresaDe: empresaDe,
             cnpjDe: cnpjDe
         };

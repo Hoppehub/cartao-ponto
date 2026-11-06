@@ -38,16 +38,16 @@
 
     function temFechada(dia) { return Object.prototype.hasOwnProperty.call(dia, 'saldoFechado'); }
 
-    /* Situação do dia: etiqueta do leitor, marcação ímpar e feriado (quando feriados.js existir). */
+    /* Situação do dia: calendário, etiqueta do leitor, pendências, tolerância e alertas. */
     function situacao(dia) {
         var partes = [];
-        if (dia.etiqueta) { partes.push(dia.etiqueta); }
-        if (dia.impar) { partes.push('MARCAÇÃO ÍMPAR — conferir'); }
-        if (window.FERIADOS && typeof window.FERIADOS.feriado === 'function') {
-            var nome = window.FERIADOS.feriado(AFD.formatarDataBR(dia.data));
-            if (nome) { partes.push('FERIADO — ' + nome); }
+        if (dia.statusSaldo === 'pendente') { partes.push('PARA CONFERIR: ' + (dia.pendencias || []).join(', ')); }
+        if (dia.calendario) {
+            partes.push((dia.calendario.tipo === 'feriado' ? 'FERIADO' : 'PONTO FACULTATIVO') + ' — ' + dia.calendario.nome);
         }
-        if (dia.statusSaldo === 'pendente') { partes.push('PARA CONFERIR'); }
+        if (dia.etiqueta && dia.etiqueta !== 'FERIADO') { partes.push(dia.etiqueta); }
+        if (dia.toleranciaAplicada) { partes.push('tolerância aplicada'); }
+        (dia.alertas || []).forEach(function (a) { partes.push(a); });
         return partes.join(' · ');
     }
 
@@ -60,6 +60,8 @@
                 : '<td class="num ' + classe(dia.saldoFechado) + '">' + esc(saldo(dia.saldoFechado)) + '</td>';
         }
         var classes = (zebra ? 'zebra ' : '') + (dia.tipo === 'falta' ? 'falta' : (dia.tipo === 'folga' ? 'folga' : ''));
+        if (dia.statusSaldo === 'pendente') { classes += ' pendente'; }
+        if (dia.calendario && dia.calendario.tipo === 'feriado') { classes += ' feriado'; }
         return '<tr class="' + classes + '">' +
             '<td>' + esc(dataBR(dia.data)) + '</td>' +
             '<td>' + esc(String(dia.diaSemana || '').slice(0, 3)) + '</td>' +
@@ -90,15 +92,6 @@
             '<td colspan="' + (colunas - 6) + '"></td></tr>';
     }
 
-    function somaFechada(dias) {
-        var total = 0, pendentes = 0;
-        dias.forEach(function (d) {
-            if (!temFechada(d)) { return; }
-            if (d.saldoFechado == null) { pendentes += 1; } else { total += d.saldoFechado; }
-        });
-        return { total: total, pendentes: pendentes };
-    }
-
     function pagina(dados, item, numero, total) {
         var g = dados.grupos[item.chave];
         var p = dados.saldos.pessoas[item.chave];
@@ -123,7 +116,10 @@
             }
         });
 
-        var fechada = comFechada ? somaFechada(dias) : null;
+        /* totais da hora fechada vêm do mesmo calcularSaldos da tela */
+        var fechada = comFechada
+            ? { total: m.saldoFechado || 0, pendentes: m.pendentes || 0, semFechada: m.semFechada || 0 }
+            : null;
         var totais =
             '<div class="totais">' +
             '<div><span>Trabalhadas</span><b>' + esc(horas(m.minutos)) + '</b></div>' +
@@ -135,7 +131,8 @@
             (fechada
                 ? '<div class="destaque"><span>Hora fechada (saldo do mês)</span><b class="' + classe(fechada.total) + '">' +
                   esc(saldo(fechada.total)) + '</b>' +
-                  (fechada.pendentes ? '<small>' + fechada.pendentes + ' dia(s) para conferir fora da soma</small>' : '') + '</div>'
+                  (fechada.pendentes ? '<small>' + fechada.pendentes + ' dia(s) para conferir fora da soma</small>' : '') +
+                  (fechada.semFechada ? '<small>' + fechada.semFechada + ' dia(s) sem horário previsto</small>' : '') + '</div>'
                 : '') +
             '</div>';
 
@@ -165,7 +162,10 @@
             '</div>' +
             '<footer class="rel-rodape">Gerado em ' + esc(agora()) + ' pelo Contador de horas' +
             (dados.nomeArquivo ? ' · Arquivo: ' + esc(dados.nomeArquivo) : '') +
-            ' · Horas práticas = minuto a minuto do relógio. Documento de conferência; não substitui a folha de pagamento.' +
+            (dados.versao ? ' · Versão do cálculo ' + esc(dados.versao) : '') +
+            (dados.hashArquivo ? '<br>SHA-256 do arquivo: <span class="mono">' + esc(dados.hashArquivo) + '</span>' : '') +
+            '<br>Horas práticas = minuto a minuto do relógio. Hora fechada = após a tolerância de 5 min por batida e 10 min no dia ' +
+            '(CLT art. 58, §1º). Documento de conferência; não substitui a folha de pagamento.' +
             '</footer>' +
             '</section>';
     }
@@ -223,6 +223,8 @@
         '#' + ID + ' .pos{color:#006b2d}' +
         '#' + ID + ' tr.zebra td{background:#e4e4e4}' +
         '#' + ID + ' tr.falta td{background:#f6d6d6}' +
+        '#' + ID + ' tr.feriado td{background:#fde2c8}' +
+        '#' + ID + ' tr.pendente td{background:#fff3b0}' +
         '#' + ID + ' tr.folga td{color:#555}' +
         '#' + ID + ' tr.subtotal td{background:#c8c8c8;font-weight:bold;border-top:2px solid #000}' +
         '#' + ID + ' tr.espaco td{border:none;background:none;height:.7em;padding:0}' +

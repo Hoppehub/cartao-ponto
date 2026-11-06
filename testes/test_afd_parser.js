@@ -460,6 +460,203 @@ var semCabecalho = AFD.lerListaDeEmpresas('11144477735;Alfa\n52998224725;Beta\n'
 igual(semCabecalho.total, 2, 'empresas: sem cabeçalho, documento e empresa nas duas primeiras colunas');
 igual(AFD.lerListaDeEmpresas('').total, 0, 'empresas: lista vazia');
 
+grupo('Fase 1: horas práticas e hora fechada (CLT art. 58, §1º)');
+
+var ESC = 'sem44_9h_sex8h';
+function marcasDoDia(agenda, chave) {
+    var marcas = [];
+    var nsr = 1;
+    agenda.forEach(function (a) {
+        a[1].forEach(function (h) {
+            marcas.push({ chave: chave || 'P1', identificador: chave || 'P1', tipoIdentificador: 'PIS',
+                data: a[0], hora: h.length === 5 ? h + ':00' : h, nsr: nsr++, tipo: '3', valida: a[2] !== false });
+        });
+    });
+    return marcas;
+}
+function apurar(agenda, completar, extra) {
+    var dias = AFD.montarEspelho(marcasDoDia(agenda), [], extra && extra.montar);
+    var escala = AFD.ESCALAS[ESC].dias;
+    if (completar) {
+        dias = AFD.completarDias(dias, { escala: escala, calendario: true, inicio: completar[0], fim: completar[1], todoPeriodo: true });
+    }
+    var saldos = AFD.calcularSaldos(dias, { escala: escala, horarios: AFD.ESCALAS[ESC].horarios, calendario: true });
+    return { dias: dias, saldos: saldos };
+}
+function dia(agenda, data) {
+    return apurar(agenda).dias.filter(function (d) { return d.data === data; })[0];
+}
+
+/* segunda 03/08/2026, previsto 06:55 11:55 12:55 16:55 */
+[
+    [['06:52', '11:55', '12:55', '16:55'], 3, 0],
+    [['06:51', '11:55', '12:55', '16:59'], 8, 0],
+    [['06:50', '11:55', '12:55', '17:00'], 10, 0],
+    [['06:50', '11:56', '12:55', '17:00'], 11, 11],
+    [['06:58', '11:55', '12:55', '16:55'], -3, 0],
+    [['06:59', '11:55', '12:55', '16:51'], -8, 0],
+    [['07:00', '11:55', '12:55', '16:50'], -10, 0],
+    [['07:00', '11:54', '12:55', '16:50'], -11, -11],
+    [['06:55', '11:55', '12:55', '17:03'], 8, 8],
+    [['07:58', '12:04', '13:03', '17:05'], -52, -52],
+    [['06:55', '11:55', '12:55', '16:55'], 0, 0]
+].forEach(function (c) {
+    var d = dia([['2026-08-03', c[0]]], '2026-08-03');
+    var rotulo = c[0].join(' ');
+    igual(d.saldo, c[1], 'segunda ' + rotulo + ': horas práticas ' + c[1]);
+    igual(d.saldoFechado, c[2], 'segunda ' + rotulo + ': hora fechada ' + c[2]);
+    igual(d.statusSaldo, 'ok', 'segunda ' + rotulo + ': sem pendência');
+});
+igual(dia([['2026-08-03', ['06:52', '11:55', '12:55', '16:55']]], '2026-08-03').toleranciaAplicada, true,
+    'tolerância aplicada fica marcada no dia');
+
+/* sexta 07/08/2026, previsto 06:55 11:55 12:55 15:55 */
+[
+    [['06:55', '11:55', '12:55', '15:55'], 0, 0],
+    [['06:52', '11:55', '12:55', '15:55'], 3, 0],
+    [['06:50', '11:56', '12:55', '16:00'], 11, 11],
+    [['06:55', '11:55', '12:55', '16:55'], 60, 60],
+    [['07:00', '11:55', '12:55', '15:50'], -10, 0]
+].forEach(function (c) {
+    var d = dia([['2026-08-07', c[0]]], '2026-08-07');
+    var rotulo = c[0].join(' ');
+    igual(d.saldo, c[1], 'sexta ' + rotulo + ': horas práticas ' + c[1]);
+    igual(d.saldoFechado, c[2], 'sexta ' + rotulo + ': hora fechada ' + c[2]);
+});
+
+grupo('Fase 1: PARA CONFERIR');
+var esquecida = dia([['2026-08-03', ['06:55', '11:55', '12:55']]], '2026-08-03');
+igual(esquecida.totalMinutos, 300, 'saída esquecida: horas conhecidas preservadas');
+igual(esquecida.saldo, -240, 'saída esquecida: horas práticas brutas preservadas');
+igual(esquecida.statusSaldo, 'pendente', 'saída esquecida: dia PARA CONFERIR');
+igual(esquecida.saldoFechado, null, 'saída esquecida: hora fechada vazia');
+ok(esquecida.pendencias.indexOf('MARCAÇÃO ÍMPAR') >= 0, 'saída esquecida: motivo marcação ímpar');
+var repetida = dia([['2026-08-03', ['06:55', '06:56', '11:55', '12:55', '16:55']]], '2026-08-03');
+igual(repetida.quantidade, 5, 'batida repetida: nenhuma batida apagada');
+igual(repetida.statusSaldo, 'pendente', 'batida repetida: dia PARA CONFERIR');
+ok(repetida.pendencias.some(function (p) { return p.indexOf('MARCAÇÃO REPETIDA (06:55 e 06:56)') === 0; }), 'batida repetida: motivo com os horários');
+var exata = dia([['2026-08-03', ['06:55', '06:55', '11:55', '12:55']]], '2026-08-03');
+igual(exata.statusSaldo, 'pendente', 'batida duplicada no mesmo minuto: PARA CONFERIR');
+var duas = dia([['2026-08-03', ['06:55', '11:55']]], '2026-08-03');
+igual(duas.statusSaldo, 'pendente', 'duas batidas em dia de quatro: PARA CONFERIR');
+var invalida = dia([['2026-08-03', ['06:55', '11:55', '12:55', '25:00'], false]], '2026-08-03');
+igual(invalida.statusSaldo, 'pendente', 'hora inválida: PARA CONFERIR');
+ok(invalida.pendencias.indexOf('DATA OU HORA INVÁLIDA') >= 0, 'hora inválida: motivo');
+var impossivel = AFD.montarEspelho(marcasDoDia([['2026-02-31', ['06:55', '11:55', '12:55', '16:55']]]), []);
+ok(impossivel[0].pendencias.indexOf('DATA OU HORA INVÁLIDA') >= 0, '31/02: data impossível fica PARA CONFERIR');
+var comAjuste = apurar([['2026-08-03', ['06:55', '11:55', '12:55', '16:55']]], null,
+    { montar: { datasAjuste: { '2026-08-03': true } } }).dias[0];
+ok(comAjuste.pendencias.indexOf('AJUSTE DO RELÓGIO NESTE DIA') >= 0, 'dia com ajuste do relógio: PARA CONFERIR');
+igual(AFD.dataIsoValida('2026-02-31'), false, '31/02/2026 não existe');
+igual(AFD.dataIsoValida('2028-02-29'), true, '29/02/2028 existe (ano bissexto)');
+
+grupo('Fase 1: feriados e pontos facultativos');
+igual(AFD.pascoa(2026), '2026-04-05', 'Páscoa de 2026');
+igual(AFD.pascoa(2027), '2027-03-28', 'Páscoa de 2027');
+[
+    ['2026-01-01', 'feriado'], ['2026-04-03', 'feriado'], ['2026-04-21', 'feriado'], ['2026-05-01', 'feriado'],
+    ['2026-09-07', 'feriado'], ['2026-10-12', 'feriado'], ['2026-11-02', 'feriado'], ['2026-11-15', 'feriado'],
+    ['2026-11-20', 'feriado'], ['2026-12-25', 'feriado'],
+    ['2026-02-16', 'facultativo'], ['2026-02-17', 'facultativo'], ['2026-02-18', 'facultativo'],
+    ['2026-06-04', 'facultativo'], ['2026-10-28', 'facultativo'], ['2026-12-24', 'facultativo'], ['2026-12-31', 'facultativo']
+].forEach(function (c) {
+    var cal = AFD.diaDoCalendario(c[0]);
+    igual(cal && cal.tipo, c[1], c[0] + ' é ' + c[1]);
+});
+igual(AFD.diaDoCalendario('2026-08-03'), null, '03/08/2026 é dia comum');
+igual(AFD.diaDoCalendario('2026-07-09', { '07-09': 'Revolução Constitucionalista' }).tipo, 'feriado', 'feriado local configurável');
+
+var semanaFeriado = apurar([
+    ['2026-09-04', ['06:55', '11:55', '12:55', '15:55']],
+    ['2026-09-08', ['06:55', '11:55', '12:55', '16:55']]
+], ['2026-09-04', '2026-09-08']);
+var dia7 = semanaFeriado.dias.filter(function (d) { return d.data === '2026-09-07'; })[0];
+igual(dia7.jornadaEsperada, 0, '07/09 sem batida: jornada prevista zero');
+igual(dia7.saldo, 0, '07/09 sem batida: horas práticas 0');
+igual(dia7.saldoFechado, 0, '07/09 sem batida: hora fechada 0');
+igual(dia7.etiqueta, 'FERIADO', '07/09 sem batida: etiqueta FERIADO');
+igual(dia7.calendario.nome, 'Independência do Brasil', '07/09: nome do feriado');
+igual(semanaFeriado.saldos.pessoas.P1.saldo, 0, 'semana com feriado: nenhum débito');
+var feriadoTrab = dia([['2026-09-07', ['06:55', '11:55', '12:55', '16:55']]], '2026-09-07');
+igual(feriadoTrab.saldo, 540, 'feriado trabalhado: horas práticas +9:00');
+igual(feriadoTrab.saldoFechado, 540, 'feriado trabalhado: hora fechada +9:00');
+igual(feriadoTrab.etiqueta, 'HORA EXTRA FERIADO', 'feriado trabalhado: etiqueta HORA EXTRA FERIADO');
+
+var carnaval = apurar([
+    ['2026-02-13', ['06:55', '11:55', '12:55', '15:55']],
+    ['2026-02-18', ['06:55', '11:55', '12:55', '16:55']]
+], ['2026-02-13', '2026-02-18']);
+var dia16 = carnaval.dias.filter(function (d) { return d.data === '2026-02-16'; })[0];
+igual(dia16.tipo, 'falta', 'Carnaval sem batida: é FALTA (ponto facultativo não é folga)');
+igual(dia16.saldo, -540, 'Carnaval sem batida: horas práticas -9:00');
+igual(dia16.saldoFechado, -540, 'Carnaval sem batida: hora fechada -9:00');
+igual(dia16.calendario.tipo, 'facultativo', 'Carnaval: marcado como ponto facultativo');
+var carnavalTrab = dia([['2026-02-16', ['06:55', '11:55', '12:55', '16:55']]], '2026-02-16');
+igual(carnavalTrab.saldo, 0, 'Carnaval trabalhado: dia normal, saldo 0');
+
+grupo('Fase 1: fim de semana');
+var sabado = dia([['2026-08-08', ['07:00', '11:00']]], '2026-08-08');
+igual(sabado.saldo, 240, 'sábado trabalhado: horas práticas +4:00');
+igual(sabado.saldoFechado, 240, 'sábado trabalhado: hora fechada +4:00');
+igual(sabado.statusSaldo, 'ok', 'sábado com duas batidas não fica pendente');
+var fds = apurar([
+    ['2026-08-07', ['06:55', '11:55', '12:55', '15:55']],
+    ['2026-08-10', ['06:55', '11:55', '12:55', '16:55']]
+], ['2026-08-07', '2026-08-10']);
+var vazios = fds.dias.filter(function (d) { return d.data === '2026-08-08' || d.data === '2026-08-09'; });
+igual(vazios.length, 2, 'sábado e domingo vazios entram no espelho');
+ok(vazios.every(function (d) { return d.tipo === 'folga' && d.saldo === 0 && d.saldoFechado === 0; }),
+    'sábado e domingo vazios: sem falta, saldo 0');
+
+grupo('Fase 1: somas (dias = semana = mês = pessoa) nas duas horas');
+var mes = apurar([
+    ['2026-08-31', ['06:52', '11:55', '12:55', '16:55']],
+    ['2026-09-01', ['06:55', '11:55', '12:55', '17:25']],
+    ['2026-09-02', ['06:55', '11:55', '12:55']],
+    ['2026-09-03', ['07:00', '11:54', '12:55', '16:50']],
+    ['2026-09-04', ['06:55', '11:55', '12:55', '15:55']],
+    ['2026-09-08', ['06:55', '11:55', '12:55', '16:55']]
+], ['2026-08-31', '2026-09-08']);
+var pessoa = mes.saldos.pessoas.P1;
+function soma(lista, campo) { return lista.reduce(function (t, d) { return t + (d[campo] || 0); }, 0); }
+igual(pessoa.saldo, soma(mes.dias, 'saldo'), 'pessoa: horas práticas = soma dos dias');
+igual(pessoa.saldoFechado, soma(mes.dias.filter(function (d) { return d.statusSaldo !== 'pendente'; }), 'saldoFechado'),
+    'pessoa: hora fechada = soma dos dias sem pendência');
+igual(pessoa.pendentes, 1, 'pessoa: 1 dia PARA CONFERIR');
+['saldo', 'saldoFechado', 'minutos', 'esperado', 'pendentes', 'faltas'].forEach(function (campo) {
+    var semanas = Object.keys(pessoa.semanas).reduce(function (t, k) { return t + pessoa.semanas[k][campo]; }, 0);
+    var meses = Object.keys(pessoa.meses).reduce(function (t, k) { return t + pessoa.meses[k][campo]; }, 0);
+    igual(semanas, pessoa[campo], 'semanas somam o total (' + campo + ')');
+    igual(meses, pessoa[campo], 'meses somam o total (' + campo + ')');
+});
+igual(pessoa.meses['2026-08'].saldoFechado, 0, 'agosto: 31/08 dentro da tolerância');
+igual(pessoa.meses['2026-09'].saldo, 30 - 11 + 0 + 0 - 240, 'setembro: horas práticas somadas (07/09 feriado sem débito)');
+igual(pessoa.meses['2026-09'].saldoFechado, 30 - 11, 'setembro: hora fechada sem o dia pendente');
+
+grupo('Fase 1: alertas de jornada (não mudam o saldo)');
+var semIntervalo = dia([['2026-08-03', ['06:55', '16:55']]], '2026-08-03');
+ok(semIntervalo.alertas.some(function (a) { return a.indexOf('SEM INTERVALO') === 0; }), 'jornada de 10h sem intervalo: alerta art. 71');
+var intervaloCurto = dia([['2026-08-03', ['06:55', '11:55', '12:25', '16:55']]], '2026-08-03');
+ok(intervaloCurto.alertas.some(function (a) { return a.indexOf('INTERVALO MENOR QUE 1H') === 0; }), 'intervalo de 30 min: alerta art. 71');
+var longo = dia([['2026-08-03', ['06:00', '11:55', '12:55', '20:00']]], '2026-08-03');
+ok(longo.alertas.indexOf('MAIS DE 12H TRABALHADAS NO DIA') >= 0, 'mais de 12h: alerta');
+var descanso = apurar([
+    ['2026-08-03', ['06:55', '11:55', '12:55', '23:00']],
+    ['2026-08-04', ['06:55', '11:55', '12:55', '16:55']]
+]).dias.filter(function (d) { return d.data === '2026-08-04'; })[0];
+ok(descanso.alertas.some(function (a) { return a.indexOf('DESCANSO ENTRE JORNADAS') === 0; }), 'saída 23:00 e entrada 06:55: alerta art. 66');
+igual(dia([['2026-08-03', ['06:55', '11:55', '12:55', '16:55']]], '2026-08-03').alertas.length, 0, 'jornada normal: nenhum alerta');
+
+grupo('Fase 1: planilha segura e SHA-256');
+igual(AFD.celulaPlanilha('=1+1'), "'=1+1", 'texto =1+1 não vira fórmula');
+igual(AFD.celulaPlanilha('@SOMA(A1)'), "'@SOMA(A1)", 'texto com @ não vira fórmula');
+igual(AFD.celulaPlanilha('-00:52'), '-00:52', 'saldo negativo continua número');
+igual(AFD.celulaPlanilha('+01:30'), '+01:30', 'saldo positivo continua número');
+igual(AFD.celulaPlanilha('MARIA'), 'MARIA', 'texto comum não muda');
+igual(AFD.sha256('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad', 'SHA-256 de "abc"');
+igual(AFD.sha256(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 'SHA-256 vazio');
+igual(typeof AFD.VERSAO, 'string', 'versão das regras de cálculo exposta');
+
 grupo('Leitura enxuta');
 
 /* os campos com posicoes so sao montados quando o inspetor pede */
