@@ -115,13 +115,57 @@ cartões, pelo próprio cartão e pelo mesmo traço. Ordenar a tabela por uma co
 documento mantém o agrupamento. Cada ficha de horário mostra o NSR do registro ao passar o cursor, e a última ficha
 de um dia com número ímpar de batidas aparece com contorno tracejado.
 
-### Saldo de horas
+### Saldo de horas: HORAS PRÁTICAS e HORA FECHADA
 
-O saldo compara o trabalhado no dia com a jornada esperada **daquele dia da semana**, definida no campo
-*Jornada contratual*. Acima disso o saldo sai positivo (verde), abaixo sai negativo (vermelho). Nos
-cartões, cada dia mostra o próprio saldo ao lado das batidas, e ao fim de cada semana e de cada mês entra
-uma faixa de fechamento com trabalhado, esperado e saldo do período. Na tabela, o saldo é uma coluna, e a
-faixa do trabalhador traz o total do período filtrado. A exportação em CSV leva jornada esperada e saldo.
+Cada dia mostra **dois** saldos, lado a lado, nos cartões, nos fechamentos de semana e de mês, na tabela, no
+CSV e no relatório:
+
+- **HORAS PRÁTICAS** — o relógio puro: trabalhado − previsto, minuto a minuto, sem nenhum abono. Entrou 3
+  minutos antes, +00:03.
+- **HORA FECHADA** — o saldo depois da tolerância legal (CLT art. 58, §1º, com a leitura da Súmula 366 do
+  TST). Cada batida é comparada com o horário previsto dela (06:55, 11:55, 12:55 e 16:55; 15:55 na sexta).
+  Se **toda** batida variou até **5 minutos** e a soma das variações do dia é de até **10 minutos**, a hora
+  fechada é **00:00**. Se **qualquer** batida passou de 5 minutos, ou a soma passou de 10, vale a diferença
+  **inteira** (não se abate a tolerância).
+
+| Batidas (segunda) | Horas práticas | Hora fechada |
+|---|---|---|
+| 06:52 11:55 12:55 16:55 | +00:03 | 00:00 |
+| 06:50 11:55 12:55 17:00 | +00:10 | 00:00 |
+| 06:50 11:56 12:55 17:00 | +00:11 | +00:11 |
+| 06:55 11:55 12:55 17:03 | +00:08 | +00:08 (uma batida variou 8 min) |
+| 07:00 11:54 12:55 16:50 | −00:11 | −00:11 |
+
+A hora fechada só é calculada na escala que tem horários previstos por batida (a padrão). Nas outras, aparece
+"—" com a explicação. Fim de semana e feriado trabalhados entram inteiros nas duas; falta desconta a jornada
+inteira nas duas.
+
+### Dias PARA CONFERIR
+
+O sistema não inventa batida nem apaga batida. Quando o dia não permite fechar o saldo com segurança, ele fica
+**PARA CONFERIR**, com o motivo escrito: marcação ímpar (batida esquecida), marcação repetida (duas batidas a 5
+minutos ou menos uma da outra), data ou hora inválida (31/02, 25:00), ajuste do relógio naquele dia
+(registro tipo 4) ou quantidade de batidas diferente da jornada (por exemplo 2 de 4). As horas conhecidas
+continuam em HORAS PRÁTICAS; a HORA FECHADA fica vazia e o dia sai da soma fechada, que mostra quantos dias
+ficaram de fora.
+
+### Feriados e pontos facultativos
+
+O calendário está no próprio cálculo, com as datas móveis pela Páscoa:
+
+- **Feriado nacional** (01/01, Paixão de Cristo, 21/04, 01/05, 07/09, 12/10, 02/11, 15/11, 20/11, 25/12):
+  jornada prevista **zero**. Sem batida, não há débito (etiqueta FERIADO); com batida, **todo** o tempo é
+  hora extra (HORA EXTRA FERIADO).
+- **Ponto facultativo** (Carnaval segunda e terça, Quarta-feira de Cinzas, Corpus Christi, 28/10, 24/12,
+  31/12): **dia normal de trabalho** na Fortman, só marcado em destaque no dia. Sem batida, é FALTA.
+- Feriados estaduais e municipais: `window.LEITOR_AFD_FERIADOS_LOCAIS = { '07-09': 'Nome', '2026-06-13': 'Nome' }`
+  num script carregado antes do leitor.
+
+### Alertas de jornada
+
+Sem mexer no saldo, o dia ganha um aviso quando há mais de 12h trabalhadas, intervalo menor que 1h em jornada
+de mais de 6h (ou sem intervalo registrado), intervalo menor que 15 min em jornada de 4h a 6h (CLT art. 71)
+ou menos de 11h de descanso desde a saída do dia anterior (CLT art. 66).
 
 ### Jornada contratual
 
@@ -131,13 +175,13 @@ número único. As opções prontas:
 
 | Escala | Distribuição | Semana |
 |---|---|---|
-| **44h — 9h de segunda a quinta e 8h na sexta** (padrão) | 9h × 4 + 8h | 44:00 |
+| **44h — 06:55 às 16:55, sexta até 15:55 (1h de almoço)** (padrão, com horários por batida) | 9h × 4 + 8h | 44:00 |
 | **44h — 8h48 de segunda a sexta** | 8h48 × 5 | 44:00 |
 | **44h — 8h de segunda a sexta e 4h no sábado** | 8h × 5 + 4h | 44:00 |
 | 40h — 8h de segunda a sexta | 8h × 5 | 40:00 |
 | 36h — 7h12 de segunda a sexta | 7h12 × 5 | 36:00 |
 | 30h — 6h de segunda a sexta | 6h × 5 | 30:00 |
-| Mesma jornada em todo dia com marcação | valor único | — |
+| Mesma jornada de segunda a sexta | valor único | — |
 | Personalizada por dia da semana | sete campos | soma exibida |
 
 A escala padrão corresponde à jornada de entrada às 06:55 com saída às 16:55 (e 15:55 na sexta), com uma
@@ -159,8 +203,9 @@ classifica cada dia pela escala:
 | Dia **sem** jornada prevista e sem marcação | **SÁBADO** / **DOMINGO** (o nome do dia) | zero |
 | Dia **sem** jornada prevista **com** marcação | **HORA EXTRA SÁBADO** / **DOMINGO** | tudo entra como saldo positivo |
 
-A regra segue a escala, não o calendário: se você escolher a escala *8h de segunda a sexta e 4h no sábado*,
-o sábado passa a ter jornada prevista — aí sábado vazio vira FALTA e sábado trabalhado é dia normal.
+A regra segue a escala e o calendário: se você escolher a escala *8h de segunda a sexta e 4h no sábado*, o
+sábado passa a ter jornada prevista — aí sábado vazio vira FALTA e sábado trabalhado é dia normal. Feriado
+nacional nunca tem jornada prevista (etiqueta FERIADO ou HORA EXTRA FERIADO).
 
 O campo *Dias sem marcação* controla a varredura:
 
@@ -175,21 +220,26 @@ O campo *Dias sem marcação* controla a varredura:
 Ao fim de cada semana e de cada mês entra um bloco com as métricas do período — trabalhadas, esperadas,
 dias trabalhados, faltas, dias extras — e o **saldo** em destaque, com moldura verde ou vermelha.
 
-Como o AFD **não distingue falta de folga, férias, atestado ou feriado**, tudo isso aparece como falta.
-Trate a marcação como ponto de partida da conferência, não como veredito: a justificativa está fora do
-arquivo.
+Como o AFD **não distingue falta de folga, férias ou atestado**, tudo isso aparece como falta. Trate a
+marcação como ponto de partida da conferência, não como veredito: a justificativa está fora do arquivo.
 
-Uma coisa que o AFD **não** informa e que por isso fica de fora da conta:
-- **Feriado é dia normal para a escala.** O AFD não traz calendário, então um feriado na segunda-feira
-  continua esperando a jornada daquele dia. Quem trabalhou aparece com saldo pequeno em vez do saldo
-  integral que a regra do feriado daria.
-- **A escala não conhece acordo de compensação, banco de horas nem intervalo mínimo.** O saldo é a
-  diferença bruta entre o marcado e o contratado.
+O que o AFD **não** informa e que por isso fica de fora da conta:
+- **A escala não conhece acordo de compensação nem banco de horas.** O intervalo mínimo vira alerta, não
+  desconto.
 - **A escala vale para todo mundo.** Quem cumpre horário diferente do restante da equipe é comparado com a
   mesma jornada; nesse caso, filtre por trabalhador e troque a escala antes de olhar o saldo dele.
 
-O cálculo pareia as batidas do dia na ordem (1ª com 2ª, 3ª com 4ª...). Não aplica tolerância da
-Portaria 671, adicional noturno nem jornada que vira o dia — é conferência, não folha.
+O cálculo pareia as batidas do dia na ordem (1ª com 2ª, 3ª com 4ª...). Não calcula adicional noturno nem
+jornada que vira o dia, nem percentuais de hora extra ou DSR — é conferência, não folha.
+
+### Conferência do cálculo
+
+Além dos testes do analisador, `testes/test_oraculo.js` gera meses aleatórios de AFD e compara, dia a dia, o
+resultado do programa com uma segunda calculadora escrita do zero (com os feriados digitados numa tabela, sem
+reaproveitar o código do núcleo). Ela detectou todos os 17 erros plantados de propósito para testá-la (um
+minuto a mais na tolerância, um feriado deslocado um dia, a batida repetida com limite de 4 ou 6 minutos...).
+`testes/test_navegador.js` confere que tela, relatório e CSV mostram os mesmos totais. Os três rodam no GitHub
+a cada envio.
 
 Além disso: busca e filtros (período, trabalhador, tipo de registro, gravidade), ordenação por coluna,
 exportação em CSV (separador `;`, com BOM, abre direto no Excel pt-BR), cópia para a área de transferência,
