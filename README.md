@@ -310,6 +310,7 @@ Copie `ponto/index.html` como `leitor_afd.html` para a raiz do Ahtools, junto co
 node testes/gerar_exemplos.js    # regenera exemplos/
 node testes/test_afd_parser.js   # verificações do analisador e do cálculo
 node testes/test_navegador.js    # tela = relatório = CSV, carga concorrente (precisa do Playwright)
+node testes/test_oraculo.js 2000 # 2000 meses aleatórios contra uma calculadora independente
 ```
 
 ## Leiautes implementados

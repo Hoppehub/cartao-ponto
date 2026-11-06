@@ -18,6 +18,8 @@ jobs:
         run: for f in ponto/js/*.js; do node --check "$f"; done
       - name: Testes do analisador e do cálculo
         run: node testes/test_afd_parser.js
+      - name: Conferência independente do cálculo (2000 meses aleatórios)
+        run: node testes/test_oraculo.js 2000
 
   navegador:
     # Tela, relatório e CSV com os mesmos totais; carga concorrente; API de carga.
