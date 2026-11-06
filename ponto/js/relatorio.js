@@ -51,7 +51,7 @@
         return partes.join(' · ');
     }
 
-    function linhaDia(dia, comFechada) {
+    function linhaDia(dia, comFechada, zebra) {
         var batidas = (dia.horarios || []).map(function (h) { return String(h).slice(0, 5); }).join('  ');
         var celulaFechada = '';
         if (comFechada) {
@@ -59,7 +59,8 @@
                 ? '<td class="num">—</td>'
                 : '<td class="num ' + classe(dia.saldoFechado) + '">' + esc(saldo(dia.saldoFechado)) + '</td>';
         }
-        return '<tr class="' + (dia.tipo === 'falta' ? 'falta' : (dia.tipo === 'folga' ? 'folga' : '')) + '">' +
+        var classes = (zebra ? 'zebra ' : '') + (dia.tipo === 'falta' ? 'falta' : (dia.tipo === 'folga' ? 'folga' : ''));
+        return '<tr class="' + classes + '">' +
             '<td>' + esc(dataBR(dia.data)) + '</td>' +
             '<td>' + esc(String(dia.diaSemana || '').slice(0, 3)) + '</td>' +
             '<td class="mono">' + esc(batidas || '—') + '</td>' +
@@ -113,10 +114,11 @@
         var semana = [];
         dias.forEach(function (d, i) {
             semana.push(d);
-            corpo.push(linhaDia(d, comFechada));
+            corpo.push(linhaDia(d, comFechada, semana.length % 2 === 0));
             var proximo = dias[i + 1];
             if (!proximo || proximo.chaveSemana !== d.chaveSemana) {
                 corpo.push(linhaSemana(somaDias(semana), colunas));
+                if (proximo) { corpo.push('<tr class="espaco"><td colspan="' + colunas + '"></td></tr>'); }
                 semana = [];
             }
         });
@@ -198,7 +200,7 @@
         'body.imprimindo-relatorio{background:#fff!important;padding:0!important;margin:0!important}' +
         'body.imprimindo-relatorio #' + ID + '{display:block!important}' +
         '}' +
-        '#' + ID + '{font:9pt/1.35 Arial,Helvetica,sans-serif;color:#000}' +
+        '#' + ID + '{font:9pt/1.35 Arial,Helvetica,sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
         '#' + ID + ' .rel-pagina{font-size:9pt}' +
         '#' + ID + ' *{box-sizing:border-box}' +
         '#' + ID + ' .rel-pagina{break-after:page;page-break-after:always}' +
@@ -211,7 +213,7 @@
         '#' + ID + ' .rel-pessoa small{display:block;font-size:0.833em}' +
         '#' + ID + ' .rel-pessoa span,#' + ID + ' .totais span{display:block;font-size:0.778em;text-transform:uppercase;letter-spacing:.04em;color:#444}' +
         '#' + ID + ' table{width:100%;border-collapse:collapse;margin-bottom:6px;font-size:1em}' +
-        '#' + ID + ' th,#' + ID + ' td{border:1px solid #999;padding:.2em .45em;text-align:left;vertical-align:top;font-size:1em;line-height:1.3;height:auto}' +
+        '#' + ID + ' th,#' + ID + ' td{border:1px solid #666;padding:.2em .45em;text-align:left;vertical-align:top;font-size:1em;line-height:1.3;height:auto}' +
         '#' + ID + ' th{background:#e8e8e8;font-size:0.833em;text-transform:uppercase}' +
         '#' + ID + ' tr{break-inside:avoid;page-break-inside:avoid}' +
         '#' + ID + ' .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}' +
@@ -219,9 +221,11 @@
         '#' + ID + ' .sit{font-size:0.833em}' +
         '#' + ID + ' .neg{color:#b00000}' +
         '#' + ID + ' .pos{color:#006b2d}' +
-        '#' + ID + ' tr.falta td{background:#fbeaea}' +
+        '#' + ID + ' tr.zebra td{background:#e4e4e4}' +
+        '#' + ID + ' tr.falta td{background:#f6d6d6}' +
         '#' + ID + ' tr.folga td{color:#555}' +
-        '#' + ID + ' tr.subtotal td{background:#f3f3f3;font-weight:bold}' +
+        '#' + ID + ' tr.subtotal td{background:#c8c8c8;font-weight:bold;border-top:2px solid #000}' +
+        '#' + ID + ' tr.espaco td{border:none;background:none;height:.7em;padding:0}' +
         '#' + ID + ' .totais{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;break-inside:avoid}' +
         '#' + ID + ' .totais div{border:1px solid #999;padding:3px 6px;min-width:80px}' +
         '#' + ID + ' .totais .destaque{border:2px solid #000}' +
