@@ -1,0 +1,51 @@
+# Monta o programa pronto para Windows e publica em "Releases" (quadro à direita da página).
+# Roda a cada envio para a main, depois dos testes, e também pelo botão "Run workflow".
+# Link fixo para a versão mais nova:
+#   https://github.com/Hoppehub/cartao-ponto/releases/latest/download/CartaoPonto-Windows.zip
+name: Programa para Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: programa
+  cancel-in-progress: false
+
+jobs:
+  montar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Testes do cálculo antes de montar
+        run: |
+          node testes/test_afd_parser.js
+          node testes/test_oraculo.js 2000
+      - name: PHP (para conferir o relogio.php)
+        run: sudo apt-get update -q && sudo apt-get install -y -q php-cli
+      - name: Montar o programa (motor oficial conferido pelo SHA-256)
+        run: bash ferramentas/montar_pacote.sh "" dist
+      - name: Conferir o programa montado
+        run: bash testes/test_pacote.sh dist/CartaoPonto
+      - name: Compactar
+        run: cd dist && zip -q -r -9 CartaoPonto-Windows.zip CartaoPonto && ls -lh CartaoPonto-Windows.zip
+      - name: Publicar em Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSAO=$(sed -n "s/^ *var VERSAO = '\([^']*\)';.*/\1/p" ponto/js/afd_parser.js | head -1)
+          TAG="v${VERSAO}-${GITHUB_RUN_NUMBER}"
+          NOTAS=$(printf 'Programa pronto para Windows: baixe CartaoPonto-Windows.zip, extraia e dê dois cliques em CartaoPonto.exe.\n\nPara atualizar uma instalação: copie só a pasta www e o VERSAO.txt para a pasta do programa. Nunca apague a pasta dados.\n\nVersão do cálculo %s · commit %s' "$VERSAO" "${GITHUB_SHA::7}")
+          gh release create "$TAG" dist/CartaoPonto-Windows.zip \
+            --title "Cartão Ponto para Windows — $TAG" --notes "$NOTAS" --latest
+          # guarda só as 5 versões mais novas
+          gh release list --limit 100 --json tagName --jq '.[5:][].tagName' | while read -r antiga; do
+            gh release delete "$antiga" --yes --cleanup-tag
+          done

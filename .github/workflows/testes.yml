@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: '20'
       - name: Sintaxe dos scripts da página
-        run: for f in ponto/js/*.js; do node --check "$f"; done
+        run: for f in ponto/js/*.js programa/js/*.js; do node --check "$f"; done
       - name: Testes do analisador e do cálculo
         run: node testes/test_afd_parser.js
       - name: Conferência independente do cálculo (2000 meses aleatórios)
@@ -35,3 +35,16 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Testes no navegador
         run: node testes/test_navegador.js
+
+  relogio:
+    # Download do relógio (programa/relogio.php) contra um relógio falso, com cURL e com streams.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP com cURL e OpenSSL
+        run: sudo apt-get update -q && sudo apt-get install -y -q php-cli php-curl
+      - name: Testes do relógio
+        run: |
+          php -l programa/relogio.php
+          php testes/test_relogio.php
+          php testes/test_relogio.php --streams

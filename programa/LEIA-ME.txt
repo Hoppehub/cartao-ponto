@@ -1,0 +1,58 @@
+===============================================================================
+  CARTAO PONTO - FORTMAN (programa para Windows)
+===============================================================================
+
+COMO ABRIR
+----------
+  De dois cliques em CartaoPonto.exe.
+
+  Se aparecer "O Windows protegeu o computador", clique em
+  "Mais informacoes" e depois em "Executar assim mesmo". Isso aparece
+  porque o programa nao tem assinatura digital de editora; e normal.
+
+  Atalho na area de trabalho: clique com o botao direito em
+  CartaoPonto.exe > Enviar para > Area de trabalho (criar atalho).
+
+ONDE DEIXAR A PASTA
+-------------------
+  Na Area de Trabalho ou em Documentos. NAO coloque em
+  C:\Arquivos de Programas (o Windows nao deixa o programa gravar ali)
+  e evite deixar em Downloads (e facil apagar sem querer).
+
+PRIMEIRO USO
+------------
+  1. Em "Baixar do relogio de ponto", clique em "Configurar relogio".
+  2. Informe o endereco (192.168.1.99), o usuario e a senha do relogio
+     (os mesmos do Chrome) e clique em Salvar.
+  3. Escolha o mes e clique em "Baixar e abrir".
+  Tambem da para abrir um arquivo AFD baixado pelo Chrome.
+
+O QUE O PROGRAMA MOSTRA
+-----------------------
+  - HORAS PRATICAS: minuto a minuto do relogio, sem abono.
+  - HORA FECHADA: depois da tolerancia de 5 min por batida e 10 min no dia
+    (CLT art. 58, par. 1). Passou disso, vale a diferenca inteira.
+  - FERIADO: sem jornada prevista. PONTO FACULTATIVO: dia normal, so marcado.
+  - PARA CONFERIR: batida esquecida, repetida ou invalida; fica fora da
+    hora fechada ate alguem conferir.
+  - "Relatorio por colaborador": uma pagina por colaborador e por mes,
+    para imprimir ou salvar em PDF.
+
+SEUS DADOS
+----------
+  O programa cria a pasta "dados" ao lado do CartaoPonto.exe na primeira vez
+  que voce salva a configuracao do relogio. A senha do relogio fica guardada
+  em dados\relogio.json, neste computador. Backup = copiar a pasta "dados".
+
+ATUALIZAR
+---------
+  1. Feche o programa.
+  2. Baixe a versao nova (mesmo link de sempre, na pagina do repositorio
+     Hoppehub/cartao-ponto, quadro "Releases" a direita).
+  3. Extraia, copie a pasta "www" e o arquivo "VERSAO.txt" da versao nova e
+     cole na sua pasta do programa, substituindo. NUNCA apague a pasta "dados".
+
+LICENCAS
+--------
+  O motor do programa e o PHP Desktop (codigo aberto, licenca na pasta
+  "licencas") com o PHP (licenca em php\license.txt).

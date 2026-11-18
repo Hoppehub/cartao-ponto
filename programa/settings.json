@@ -1,0 +1,63 @@
+{
+    "_leia": [
+        "Configuração da janela do Cartão Ponto, lida pelo PHP Desktop.",
+        "Este arquivo fica ao lado do CartaoPonto.exe. Não precisa mexer."
+    ],
+
+    "application": {
+        "single_instance_guid": "{446342BC-7722-4B66-BB81-40A9CAB1F34D}",
+        "dpi_aware": true
+    },
+
+    "main_window": {
+        "title": "Cartão Ponto - Fortman",
+        "default_size": [1280, 820],
+        "minimum_size": [1024, 640],
+        "maximum_size": [0, 0],
+        "disable_maximize_button": false,
+        "center_on_screen": true,
+        "start_maximized": true,
+        "start_fullscreen": false,
+        "always_on_top": false,
+        "minimize_to_tray": false
+    },
+
+    "web_server": {
+        "listen_on": ["127.0.0.1", 0],
+        "www_directory": "www",
+        "index_files": ["index.html", "index.php"],
+        "cgi_interpreter": "php/php-cgi.exe",
+        "cgi_extensions": ["php"],
+        "cgi_temp_dir": "",
+        "hide_files": []
+    },
+
+    "chrome": {
+        "cache_path": "webcache",
+        "log_file": "debug.log",
+        "log_severity": "disable",
+        "remote_debugging_port": 0,
+        "runtime_style": "alloy",
+        "command_line_switches": {"disable-gpu": ""},
+        "external_navigation": true,
+        "external_drag": false,
+        "reload_page_F5": true,
+        "devtools_F12": false,
+        "enable_downloads": true,
+        "context_menu": {
+            "enable_menu": true,
+            "navigation": false,
+            "print": true,
+            "view_source": false,
+            "open_in_external_browser": false,
+            "devtools": false
+        }
+    },
+
+    "debugging": {
+        "show_console": false,
+        "subprocess_show_console": false,
+        "log_level": "ERROR",
+        "log_file": "debug.log"
+    }
+}
