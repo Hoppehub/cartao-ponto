@@ -70,6 +70,26 @@ foreach (['json-erro' => 'JSON de erro', 'html' => 'página HTML', 'vazio' => 'r
     ok(!$r['ok'] && strpos($r['erro'], 'não é um AFD') !== false, "$rotulo com HTTP 200 não vira AFD", $r['erro'] ?? 'aceitou');
 }
 
+cenario('sem-cabecalho');
+$r = tentar($comHttp);
+ok($r['ok'] && $r['r']['semCabecalho'] === true && strpos($r['r']['afd'], '0000000023') === 0,
+    'AFD só com os registros do mês (sem cabeçalho) é aceito e sinalizado', $r['erro'] ?? '');
+
+cenario('utf16');
+$r = tentar($comHttp);
+ok($r['ok'] && strpos($r['r']['afd'], "\0") === false && parece_afd($r['r']['afd']) && $r['r']['semCabecalho'] === false,
+    'AFD em UTF-16 é convertido para texto simples', $r['erro'] ?? '');
+
+cenario('html');
+$r = tentar($comHttp);
+$guardado = dirname(RELOGIO_CONFIG) . '/resposta-do-relogio.txt';
+ok(!$r['ok'] && is_file($guardado) && strpos(file_get_contents($guardado), '<html>') !== false
+    && strpos($r['erro'], 'resposta-do-relogio.txt') !== false && strpos($r['erro'], 'bytes') !== false,
+    'resposta não reconhecida fica guardada para diagnóstico, com resumo na mensagem', $r['erro'] ?? '');
+ok(strpos(guardar_resposta_estranha('00000000231009202606550120654785'), '0000000023##') !== false,
+    'o resumo esconde os dígitos depois do décimo (sem expor PIS ou CPF)');
+@unlink($guardado);
+
 cenario('login-redireciona');
 $r = tentar($comHttp);
 ok(!$r['ok'] && strpos($r['erro'], 'redirecion') !== false, 'login redirecionado: não segue o redirecionamento', $r['erro'] ?? 'seguiu');

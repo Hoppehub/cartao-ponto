@@ -119,12 +119,14 @@
         }
         var nomes = [];
         var avisoNomes = '';
+        var semCabecalho = false;
         pedir('baixar', { ano: ano, mes: mes }).then(function (r) {
             return r.json();
         }).then(function (resposta) {
             // O AFD do relógio costuma vir sem o cadastro dos empregados: a lista de nomes vai junto.
             nomes = resposta.nomes || [];
             avisoNomes = resposta.avisoNomes || '';
+            semCabecalho = !!resposta.semCabecalho;
             var csv = nomes.length
                 ? 'documento;nome\n' + nomes.map(function (n) {
                     return n.doc + ';' + String(n.nome).replace(/[;\r\n]/g, ' ');
@@ -148,6 +150,8 @@
         }).then(function () {
             estado('Mostrando ' + doisDigitos(mes) + '/' + ano +
                 (nomes.length ? ', com os nomes cadastrados no relógio.' : '.') +
+                (semCabecalho ? ' O relógio mandou só os registros do mês, sem o cabeçalho do arquivo: por isso a auditoria ' +
+                    'aponta "cabeçalho ausente". É esperado e não muda as horas.' : '') +
                 (avisoNomes ? ' Atenção: ' + avisoNomes : ''), !!avisoNomes);
         }).catch(function (e) {
             estado(e.message, true);

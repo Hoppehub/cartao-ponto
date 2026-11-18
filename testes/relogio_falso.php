@@ -34,6 +34,8 @@ switch ($rota) {
         if ($cenario === 'html') { header('Content-Type: text/html'); echo '<html><body>Erro</body></html>'; break; }
         if ($cenario === 'vazio') { echo ''; break; }
         if ($cenario === 'afd-redireciona') { header('Location: /outro'); http_response_code(302); break; }
+        if ($cenario === 'sem-cabecalho') { echo "0000000023010920260655012065478502\r\n0000000033010920261155012065478502\r\n"; break; }
+        if ($cenario === 'utf16') { echo "\xFF\xFE" . implode("\0", str_split($afd)) . "\0"; break; }
         header('Content-Type: application/octet-stream');
         echo $afd;
         break;

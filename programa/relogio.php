@@ -151,20 +151,55 @@ function mensagem_do_relogio(string $corpo): string
 }
 
 /**
- * O conteúdo parece um AFD? A primeira linha útil precisa ser o cabeçalho
- * (NSR de 9 dígitos seguido do tipo 1), como nas Portarias 1.510 e 671.
- * JSON de erro, página HTML ou resposta vazia não passam.
+ * Limpa o que o relógio mandou antes de conferir: tira a marca BOM e, se o
+ * texto veio em UTF-16 (um byte zero entre as letras), volta para texto simples.
+ */
+function normalizar_afd(string $conteudo): string
+{
+    if (strncmp($conteudo, "\xFF\xFE", 2) === 0 || strncmp($conteudo, "\xFE\xFF", 2) === 0) {
+        $conteudo = substr($conteudo, 2);
+    }
+    if (strpos(substr($conteudo, 0, 200), "\0") !== false) {
+        $conteudo = str_replace("\0", '', $conteudo);
+    }
+    return (string) preg_replace('/^\xEF\xBB\xBF/', '', $conteudo);
+}
+
+/**
+ * O conteúdo parece um AFD? A primeira linha útil precisa começar como um registro
+ * do AFD: NSR de 9 dígitos seguido do tipo do registro (1 a 9). Com o filtro por data,
+ * alguns relógios mandam só os registros do período, sem o cabeçalho (tipo 1); por isso
+ * qualquer tipo é aceito. JSON de erro, página HTML ou resposta vazia não passam.
  */
 function parece_afd(string $conteudo): bool
 {
-    $conteudo = preg_replace('/^\xEF\xBB\xBF/', '', $conteudo);
-    foreach (preg_split('/\r\n|\n|\r/', $conteudo) as $linha) {
+    foreach (preg_split('/\r\n|\n|\r/', normalizar_afd($conteudo)) as $linha) {
         if (trim($linha) === '') {
             continue;
         }
-        return (bool) preg_match('/^\d{9}1/', $linha);
+        return (bool) preg_match('/^\d{9}[1-9]/', ltrim($linha));
     }
     return false;
+}
+
+/**
+ * Guarda a resposta que não foi reconhecida, para diagnóstico, em dados/resposta-do-relogio.txt
+ * (no computador de quem usa). Devolve um resumo seguro: tamanho e começo, com os dígitos
+ * depois do décimo trocados por # (não expõe CPF nem PIS na tela).
+ */
+function guardar_resposta_estranha(string $conteudo): string
+{
+    $pasta = dirname(RELOGIO_CONFIG);
+    if (is_dir($pasta) || @mkdir($pasta, 0775, true)) {
+        @file_put_contents($pasta . '/resposta-do-relogio.txt', $conteudo);
+    }
+    $inicio = substr(preg_replace('/\s+/', ' ', $conteudo), 0, 40);
+    $contador = 0;
+    $inicio = preg_replace_callback('/\d/', function ($m) use (&$contador) {
+        return ++$contador > 10 ? '#' : $m[0];
+    }, $inicio);
+    $inicio = preg_replace('/[^\x20-\x7E]/', '?', $inicio);
+    return strlen($conteudo) . ' bytes, começando com "' . $inicio . '"';
 }
 
 /**
@@ -223,7 +258,7 @@ function nomes_do_relogio(string $base, string $sessao): array
     return ['nomes' => $nomes, 'aviso' => $aviso];
 }
 
-/** @return array{afd:string,nomes:list<array{doc:string,nome:string}>,avisoNomes:string} */
+/** @return array{afd:string,nomes:list<array{doc:string,nome:string}>,avisoNomes:string,semCabecalho:bool} */
 function baixar_afd(array $config, int $ano, int $mes): array
 {
     if (!function_exists('curl_init') && !extension_loaded('openssl')) {
@@ -280,10 +315,14 @@ function baixar_afd(array $config, int $ano, int $mes): array
     }
     if (!parece_afd($afd)) {
         $detalhe = mensagem_do_relogio($afd);
+        $resumo = guardar_resposta_estranha($afd);
         falhar('O relógio respondeu, mas o conteúdo não é um AFD' . ($detalhe !== '' ? " ($detalhe)" : '')
-            . '. Tente de novo; se continuar, baixe pelo Chrome e abra o arquivo no contador.', 502);
+            . ". Recebido: $resumo. A resposta completa foi guardada em dados\\resposta-do-relogio.txt, na pasta do programa."
+            . ' Enquanto isso, baixe pelo Chrome e abra o arquivo no contador.', 502);
     }
-    return ['afd' => $afd, 'nomes' => $nomes['nomes'], 'avisoNomes' => $nomes['aviso']];
+    $afd = normalizar_afd($afd);
+    return ['afd' => $afd, 'nomes' => $nomes['nomes'], 'avisoNomes' => $nomes['aviso'],
+        'semCabecalho' => !preg_match('/^\s*\d{9}1/', $afd)];
 }
 
 /** Atende o pedido da página (?acao=...). */
@@ -337,7 +376,8 @@ function atender(): void
             falhar('Configure primeiro o endereço do relógio.');
         }
         $r = baixar_afd($c, $ano, $mes);
-        responder(200, ['afd' => base64_encode($r['afd']), 'nomes' => $r['nomes'], 'avisoNomes' => $r['avisoNomes']]);
+        responder(200, ['afd' => base64_encode($r['afd']), 'nomes' => $r['nomes'], 'avisoNomes' => $r['avisoNomes'],
+            'semCabecalho' => $r['semCabecalho']]);
         return;
     }
 
