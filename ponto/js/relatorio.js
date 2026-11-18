@@ -11,7 +11,7 @@
  * ordem de empresa e de nome, e o cabeçalho traz a empresa do colaborador.
  *
  * Quando o núcleo passar a entregar saldoFechado por dia, a coluna HORA FECHADA
- * aparece sozinha ao lado de HORAS PRÁTICAS.
+ * aparece sozinha ao lado das horas trabalhadas.
  */
 (function () {
     'use strict';
@@ -83,7 +83,6 @@
             '<td class="mono">' + esc(batidas || '—') + '</td>' +
             '<td class="num">' + esc(horas(dia.totalMinutos)) + '</td>' +
             '<td class="num">' + esc(horas(dia.jornadaEsperada)) + '</td>' +
-            '<td class="num ' + classe(dia.saldo) + '">' + esc(saldo(dia.saldo)) + '</td>' +
             celulaFechada +
             '<td class="sit">' + esc(situacao(dia)) + '</td>' +
             '</tr>';
@@ -104,8 +103,7 @@
         return '<tr class="subtotal"><td colspan="3">Total da semana ' + esc(dataBR(b.inicio)) + ' a ' + esc(dataBR(b.fim)) + '</td>' +
             '<td class="num">' + esc(horas(b.minutos)) + '</td>' +
             '<td class="num">' + esc(horas(b.esperado)) + '</td>' +
-            '<td class="num ' + classe(b.saldo) + '">' + esc(saldo(b.saldo)) + '</td>' +
-            (colunas === 8 ? '<td class="num ' + classe(b.fechada) + '">' + esc(saldo(b.fechada)) + '</td><td></td>' : '<td></td>') +
+            (colunas === 7 ? '<td class="num ' + classe(b.fechada) + '">' + esc(saldo(b.fechada)) + '</td><td></td>' : '<td></td>') +
             '</tr>';
     }
 
@@ -115,7 +113,7 @@
         var m = (p.meses && p.meses[item.mes]) || {};
         var dias = item.dias;
         var comFechada = dias.some(temFechada);
-        var colunas = comFechada ? 8 : 7;
+        var colunas = comFechada ? 7 : 6;
         var cab = dados.cabecalho;
         var empresa = item.empresa;
         var cnpj = dados.cnpjDe(empresa);
@@ -144,7 +142,6 @@
             '<div><span>Dias trabalhados</span><b>' + esc(m.dias || 0) + '</b></div>' +
             '<div><span>Faltas</span><b>' + esc(m.faltas || 0) + '</b></div>' +
             '<div><span>Dias extras</span><b>' + esc(m.extras || 0) + '</b></div>' +
-            '<div class="destaque"><span>Horas práticas (saldo do mês)</span><b class="' + classe(m.saldo) + '">' + esc(saldo(m.saldo)) + '</b></div>' +
             (fechada
                 ? '<div class="destaque"><span>Hora fechada (saldo do mês)</span><b class="' + classe(fechada.total) + '">' +
                   esc(saldo(fechada.total)) + '</b>' +
@@ -170,7 +167,7 @@
             '</div>' +
             '<table class="rel-dias"><thead><tr>' +
             '<th>Data</th><th>Dia</th><th>Marcações</th><th class="num">Trabalhado</th><th class="num">Previsto</th>' +
-            '<th class="num">Horas práticas</th>' + (comFechada ? '<th class="num">Hora fechada</th>' : '') +
+            (comFechada ? '<th class="num">Hora fechada</th>' : '') +
             '<th>Situação</th></tr></thead><tbody>' + corpo.join('') + '</tbody></table>' +
             totais +
             '<div class="rel-assinaturas">' +
@@ -181,7 +178,7 @@
             (dados.nomeArquivo ? ' · Arquivo: ' + esc(dados.nomeArquivo) : '') +
             (dados.versao ? ' · Versão do cálculo ' + esc(dados.versao) : '') +
             (dados.hashArquivo ? '<br>SHA-256 do arquivo: <span class="mono">' + esc(dados.hashArquivo) + '</span>' : '') +
-            '<br>Horas práticas = minuto a minuto do relógio. Hora fechada = após a tolerância de 5 min por batida e 10 min no dia ' +
+            '<br>Trabalhado = horas batidas no relógio. Hora fechada = saldo após a tolerância de 5 min por batida e 10 min no dia ' +
             '(CLT art. 58, §1º). Documento de conferência; não substitui a folha de pagamento.' +
             '</footer>' +
             '</section>';
@@ -239,13 +236,18 @@
         '#' + ID + ' .sit{font-size:0.833em}' +
         '#' + ID + ' .neg{color:#b00000}' +
         '#' + ID + ' .pos{color:#006b2d}' +
-        '#' + ID + ' tr.zebra td{background:#e4e4e4}' +
-        '#' + ID + ' tr.falta td{background:#f6d6d6}' +
-        '#' + ID + ' tr.feriado td{background:#fde2c8}' +
-        '#' + ID + ' tr.pendente td{background:#fff3b0}' +
-        '#' + ID + ' tr.folga td{color:#555}' +
-        '#' + ID + ' tr.subtotal td{background:#c8c8c8;font-weight:bold;border-top:2px solid #000}' +
-        '#' + ID + ' tr.espaco td{border:none;background:none;height:.7em;padding:0}' +
+        /* cores fixas do modelo aprovado: o tema escuro da tela não pode vazar para o papel */
+        '#' + ID + ',#' + ID + ' tr,#' + ID + ' td,#' + ID + ' th{background:#fff!important;color:#000!important}' +
+        '#' + ID + ' th{background:#e8e8e8!important}' +
+        '#' + ID + ' tr.zebra td{background:#e4e4e4!important}' +
+        '#' + ID + ' tr.falta td{background:#f6d6d6!important}' +
+        '#' + ID + ' tr.feriado td{background:#fde2c8!important}' +
+        '#' + ID + ' tr.pendente td{background:#fff3b0!important}' +
+        '#' + ID + ' tr.folga td{color:#555!important}' +
+        '#' + ID + ' tr.subtotal td{background:#c8c8c8!important;font-weight:bold;border-top:2px solid #000}' +
+        '#' + ID + ' tr.espaco,#' + ID + ' tr.espaco td{border:none;background:#fff!important;height:.7em;padding:0}' +
+        '#' + ID + ' td.neg,#' + ID + ' b.neg{color:#b00000!important}' +
+        '#' + ID + ' td.pos,#' + ID + ' b.pos{color:#006b2d!important}' +
         '#' + ID + ' .totais{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;break-inside:avoid}' +
         '#' + ID + ' .totais div{border:1px solid #999;padding:3px 6px;min-width:80px}' +
         '#' + ID + ' .totais .destaque{border:2px solid #000}' +

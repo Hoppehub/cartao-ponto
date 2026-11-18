@@ -3,7 +3,7 @@
  *   node testes/test_navegador.js
  *
  * Confere que a tela, o relatório por colaborador e o CSV mostram os mesmos
- * totais de HORAS PRÁTICAS e HORA FECHADA para cada colaborador, que só a
+ * totais de horas trabalhadas e HORA FECHADA para cada colaborador, que só a
  * última carga desenha a tela e que a API LeitorAFD.carregar aplica o período.
  * Sem o Playwright instalado, o teste é pulado (saída 0).
  */
@@ -111,30 +111,31 @@ function minutos(texto) {
         return cartoes.map(function (c) {
             var t = c.querySelector('.resumo-doc').textContent;
             return { nome: c.querySelector('.nome-doc').textContent,
-                praticas: t.split('horas práticas')[1].split('·')[0], fechada: t.split('hora fechada')[1] };
+                trabalhadas: t.split('trabalhadas')[0].split('·').pop(), fechada: t.split('hora fechada')[1] };
         });
     });
     var download = await Promise.all([pagina.waitForEvent('download'), pagina.click('#btnCsv')]);
     var csv = fs.readFileSync(await download[0].path(), 'utf8').replace(/^﻿/, '').split('\r\n')
         .map(function (l) { return l.slice(1, -1).split('";"'); });
     var cab = csv[0];
-    var iNome = cab.indexOf('Trabalhador'), iPrat = cab.indexOf('Horas praticas'), iFech = cab.indexOf('Hora fechada');
+    var iNome = cab.indexOf('Trabalhador'), iTrab = cab.indexOf('Total trabalhado'), iFech = cab.indexOf('Hora fechada');
     await pagina.click('#btnRelatorio');
     var relatorio = await pagina.$$eval('#relatorioImpressao .rel-pagina', function (pags) {
         return pags.map(function (p) {
             var d = p.querySelectorAll('.totais .destaque b');
-            return { nome: p.querySelector('.rel-pessoa b').textContent, praticas: d[0].textContent, fechada: d[1] ? d[1].textContent : '' };
+            return { nome: p.querySelector('.rel-pessoa b').textContent,
+                trabalhadas: p.querySelector('.totais div b').textContent, fechada: d[0] ? d[0].textContent : '' };
         });
     });
     igual(relatorio.length, 4, 'relatório: uma página por colaborador no mês');
     tela.forEach(function (t) {
         var rel = relatorio.filter(function (x) { return x.nome === t.nome; })[0] || {};
         var linhas = csv.slice(1).filter(function (l) { return l[iNome] === t.nome; });
-        var somaPrat = linhas.reduce(function (s, l) { return s + minutos(l[iPrat]); }, 0);
+        var somaTrab = linhas.reduce(function (s, l) { return s + minutos(l[iTrab]); }, 0);
         var somaFech = linhas.reduce(function (s, l) { return s + (l[iFech] ? minutos(l[iFech]) : 0); }, 0);
-        igual(minutos(rel.praticas), minutos(t.praticas), t.nome + ': horas práticas iguais na tela e no relatório');
+        igual(minutos(rel.trabalhadas), minutos(t.trabalhadas), t.nome + ': horas trabalhadas iguais na tela e no relatório');
         igual(minutos(rel.fechada), minutos(t.fechada), t.nome + ': hora fechada igual na tela e no relatório');
-        igual(somaPrat, minutos(t.praticas), t.nome + ': soma das horas práticas do CSV igual à tela');
+        igual(somaTrab, minutos(t.trabalhadas), t.nome + ': soma das horas trabalhadas do CSV igual à tela');
         igual(somaFech, minutos(t.fechada), t.nome + ': soma da hora fechada do CSV igual à tela');
     });
 
@@ -144,9 +145,12 @@ function minutos(texto) {
     var escala = AFD.ESCALAS.sem44_9h_sex8h;
     esp = AFD.completarDias(esp, { escala: escala.dias, calendario: true });
     var saldos = AFD.calcularSaldos(esp, { escala: escala.dias, horarios: escala.horarios, calendario: true });
-    var somaNode = Object.keys(saldos.pessoas).reduce(function (s, k) { return s + saldos.pessoas[k].saldo; }, 0);
-    var somaTela = tela.reduce(function (s, t) { return s + minutos(t.praticas); }, 0);
-    igual(somaTela, somaNode, 'soma das horas práticas da tela igual ao cálculo direto no Node');
+    var somaNode = Object.keys(saldos.pessoas).reduce(function (s, k) { return s + saldos.pessoas[k].saldoFechado; }, 0);
+    var somaTela = tela.reduce(function (s, t) { return s + minutos(t.fechada); }, 0);
+    igual(somaTela, somaNode, 'soma da hora fechada da tela igual ao cálculo direto no Node');
+    var trabNode = Object.keys(saldos.pessoas).reduce(function (s, k) { return s + saldos.pessoas[k].minutos; }, 0);
+    igual(tela.reduce(function (s, t) { return s + minutos(t.trabalhadas); }, 0), trabNode,
+        'soma das horas trabalhadas da tela igual ao cálculo direto no Node');
 
     console.log('\nCarga concorrente');
     var grande = '';

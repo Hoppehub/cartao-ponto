@@ -524,7 +524,7 @@
         }
         estado.aba = 'espelho';
 
-        if (resultado.layout === 'desconhecido') {
+        if (resultado.layout === 'desconhecido' && !resultado.marcacoes.length) {
             mostrarAviso('Não foi possível identificar o leiaute do arquivo. ' +
                 'Confira se é mesmo um AFD ou selecione o leiaute manualmente antes de carregar de novo.');
         }
@@ -991,8 +991,8 @@
         case 'resumo': html = abaResumo(); break;
         case 'marcacoes': html = barraFiltros({ datas: true, pessoas: true, tipos: true }) + '<div id="areaTabela"></div>'; break;
         case 'espelho': html = barraFiltros({ datas: true, empresas: true, pessoas: true, visao: true, jornada: true }) +
-            '<p class="legenda-horas"><b>Horas práticas</b>: minuto a minuto do relógio, sem nenhum abono. ' +
-            '<b>Hora fechada</b>: depois da tolerância de até 5 minutos por batida e 10 minutos no dia (CLT art. 58, §1º); ' +
+            '<p class="legenda-horas"><b>Trabalhado</b>: as horas que a pessoa bateu no relógio. ' +
+            '<b>Hora fechada</b> (saldo): depois da tolerância de até 5 minutos por batida e 10 minutos no dia (CLT art. 58, §1º); ' +
             'passando disso, vale a diferença inteira. Feriado nacional não tem jornada prevista; ponto facultativo é dia normal. ' +
             'Dia <b>para conferir</b> (batida ímpar, repetida, inválida ou com ajuste do relógio) fica fora da hora fechada até alguém conferir.</p>' +
             '<div id="areaTabela"></div>'; break;
@@ -1247,7 +1247,6 @@
 
     /* fechamento de semana ou de mês, dentro do cartão do trabalhador */
     function blocoFechamento(classe, titulo, icone, periodo, balde) {
-        var sinal = classeSaldo(balde.saldo);
 
         var metricas = [
             metrica('Trabalhadas', esc(AFD.formatarMinutos(balde.minutos))),
@@ -1259,8 +1258,6 @@
         if (balde.pendentes) {
             metricas.push(metrica('Para conferir', '<span class="negativo">' + numeroBR(balde.pendentes) + '</span>'));
         }
-        metricas.push(metrica('Horas práticas', '<span class="' + sinal + '">' + esc(AFD.formatarSaldo(balde.saldo)) + '</span>',
-            'destaque ' + sinal));
         var sinalFechada = classeSaldo(balde.saldoFechado || 0);
         metricas.push(metrica('Hora fechada', fechadaTotalHTML(balde), 'destaque ' + sinalFechada));
 
@@ -1308,8 +1305,7 @@
                       esc(g.nome) + '</span>'
                     : '<span class="sem-nome">nome não informado no arquivo</span>') +
                 (mostrarEmpresa ? '<span class="etiqueta neutra" title="Empresa">' + esc(empresaDe(chave)) + '</span>' : '') +
-                '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · horas práticas ' +
-                saldoHTML(saldos.pessoas[chave].saldo) + ' · hora fechada ' +
+                '<span class="resumo-doc">' + resumoDoGrupo(g) + ' · hora fechada ' +
                 fechadaTotalHTML(saldos.pessoas[chave]) + '</span>' +
                 '</header>');
 
@@ -1389,8 +1385,8 @@
                 html.push('<div class="dia-horas">' +
                     '<div class="fichas-e-avisos"><div class="fichas">' + fichas + '</div>' + avisos + '</div>' +
                     '<div class="saldos-dia">' +
-                    '<div class="saldo-dia"><span class="rotulo">Horas práticas</span>' +
-                    '<span class="valor ' + classeSaldo(d.saldo) + '">' + esc(AFD.formatarSaldo(d.saldo)) + '</span></div>' +
+                    '<div class="saldo-dia"><span class="rotulo">Trabalhado</span>' +
+                    '<span class="valor neutro">' + esc(AFD.formatarMinutos(d.totalMinutos)) + '</span></div>' +
                     '<div class="saldo-dia"><span class="rotulo">Hora fechada</span>' +
                     '<span class="valor">' + fechadaDiaHTML(d) + '</span>' +
                     (d.toleranciaAplicada ? '<span class="nota-tolerancia">tolerância aplicada</span>' : '') +
@@ -1426,7 +1422,6 @@
             } },
             { titulo: 'Qtde.', classe: 'num', valor: function (e) { return e.quantidade; }, celula: function (e) { return numeroBR(e.quantidade); } },
             { titulo: 'Total trabalhado', classe: 'num mono', valor: function (e) { return e.totalMinutos; }, celula: function (e) { return esc(e.total); } },
-            { titulo: 'Horas práticas', classe: 'num mono', valor: function (e) { return e.saldo; }, celula: function (e) { return saldoHTML(e.saldo); } },
             { titulo: 'Hora fechada', classe: 'num mono', valor: function (e) { return e.saldoFechado == null ? -1e9 : e.saldoFechado; }, celula: fechadaDiaHTML },
             { titulo: 'Situação', celula: function (e) {
                 var selos = [];
@@ -1456,8 +1451,7 @@
                         '<span class="rotulo-grupo">' + esc(g.tipo || 'Documento') + '</span>' +
                         '<span class="doc-grupo">' + esc(documento(g.identificador, g.tipo)) + '</span>' +
                         '<span class="nome-grupo">' + esc(g.nome || 'sem cadastro no arquivo') + '</span>' +
-                        '<span class="resumo-grupo">' + resumoDoGrupo(g) + ' · horas práticas ' +
-                        saldoHTML(saldos.pessoas[e.chave].saldo) + ' · hora fechada ' +
+                        '<span class="resumo-grupo">' + resumoDoGrupo(g) + ' · hora fechada ' +
                         fechadaTotalHTML(saldos.pessoas[e.chave]) + '</span>'
                 };
             }
@@ -1692,13 +1686,13 @@
             return {
                 nome: 'espelho_de_ponto',
                 cabecalho: ['Empresa', 'Trabalhador', 'Documento', 'Data', 'Dia da semana', 'Marcacoes', 'Qtde',
-                    'Total trabalhado', 'Jornada esperada', 'Horas praticas', 'Hora fechada', 'Situacao',
+                    'Total trabalhado', 'Jornada esperada', 'Hora fechada', 'Situacao',
                     'Para conferir', 'Alertas'],
                 linhas: diasEspelho.map(function (e) {
                     return [empresaDe(e.chave), e.nome, documento(e.identificador, e.tipoIdentificador), AFD.formatarDataBR(e.data),
                         e.diaSemana,
                         e.horarios.map(function (h) { return h.slice(0, 5); }).join(' ') || e.etiqueta || '',
-                        e.quantidade, e.total, AFD.formatarMinutos(e.jornadaEsperada), AFD.formatarSaldo(e.saldo),
+                        e.quantidade, e.total, AFD.formatarMinutos(e.jornadaEsperada),
                         e.saldoFechado == null ? '' : AFD.formatarSaldo(e.saldoFechado),
                         situacaoTexto(e), (e.pendencias || []).join(' | '), (e.alertas || []).join(' | ')];
                 })

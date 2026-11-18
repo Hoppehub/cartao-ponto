@@ -46,6 +46,11 @@
             '#painelRelogio .config{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border-color)}' +
             '#painelRelogio .config label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text-muted)}' +
             '#painelRelogio .config label.marcar{align-self:flex-end;padding-bottom:8px}' +
+            /* com o relógio, o título, a área de carregar arquivo e a linha de botões ficam em "Números para nerd" */
+            'body.com-relogio.carregado:not(.modo-analises) .topo,' +
+            'body.com-relogio.carregado:not(.modo-analises) #zonaArquivo,' +
+            'body.com-relogio.carregado:not(.modo-analises) #secaoCarga > .zona-acoes{display:none!important}' +
+            'body.com-relogio.carregado:not(.modo-analises) .linha-topo{display:flex!important;justify-content:flex-end}' +
             '</style>' +
             '<h3><i class="fas fa-clock"></i> Baixar do relógio de ponto</h3>' +
             '<div class="linha">' +
@@ -164,6 +169,7 @@
         if (!ancora || !$('entradaArquivo')) { return; }
         var painel = montarPainel();
         ancora.parentNode.insertBefore(painel, ancora);
+        document.body.classList.add('com-relogio');
         $('relBaixar').addEventListener('click', baixar);
         $('relSalvar').addEventListener('click', salvar);
         $('relConfigurar').addEventListener('click', function () {
@@ -171,6 +177,7 @@
         });
         carregarConfig().catch(function () {
             painel.remove(); // sem relogio.php por trás (por exemplo, a versão do site)
+            document.body.classList.remove('com-relogio');
         });
     }
 
