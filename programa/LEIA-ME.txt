@@ -21,11 +21,14 @@ ONDE DEIXAR A PASTA
 
 PRIMEIRO USO
 ------------
-  1. Em "Baixar do relogio de ponto", clique em "Configurar relogio".
-  2. Informe o endereco (192.168.1.99), o usuario e a senha do relogio
-     (os mesmos do Chrome) e clique em Salvar.
-  3. Escolha o mes e clique em "Baixar e abrir".
-  Tambem da para abrir um arquivo AFD baixado pelo Chrome.
+  1. Em "Baixar do relogio de ponto", informe o usuario e a senha do
+     relogio (os mesmos do Chrome) e clique em "Baixar e abrir".
+  2. O programa guarda o acesso e abre o mes anterior inteiro (dia 1 ao
+     ultimo dia). Das proximas vezes, ele abre esse mes sozinho.
+  3. Para ver outro mes, troque o mes e clique em "Baixar e abrir".
+  O endereco do relogio (192.168.1.99) fica em "Configurar relogio".
+  Abrir um arquivo AFD baixado pelo Chrome e carregar listas de nomes e
+  de empresas fica em "Numeros para nerd".
 
 O QUE O PROGRAMA MOSTRA
 -----------------------

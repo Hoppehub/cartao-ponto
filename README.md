@@ -18,9 +18,10 @@ cálculo, os testes, a documentação e a história do projeto.
 
 Não precisa baixar mais nada: o motor do programa já vem dentro.
 
-**Primeiro uso:** em *Baixar do relógio de ponto* → **Configurar relógio**, informe o endereço
-(`192.168.1.99`), o usuário e a senha do relógio e clique em **Salvar**. Depois escolha o mês e clique em
-**Baixar e abrir**. Também dá para abrir um arquivo AFD baixado pelo Chrome.
+**Primeiro uso:** em *Baixar do relógio de ponto*, informe o usuário e a senha do relógio (os mesmos do
+Chrome) e clique em **Baixar e abrir**. O programa guarda o acesso e abre o **mês anterior inteiro**; das
+próximas vezes, abre esse mês sozinho. O endereço do relógio (`192.168.1.99`) fica em **Configurar relógio**.
+Abrir um arquivo AFD baixado pelo Chrome e carregar listas de nomes e de empresas fica em **Números para nerd**.
 
 ## Atualizar
 
@@ -126,6 +127,8 @@ A fase 1 foi aprovada e juntada às versões oficiais. Na reinstalação, ficou 
   empresas só aparecem em **Números para nerd**.
 - O relatório passou a sair sempre nas cores aprovadas (branco e cinza, feriado em pêssego, para conferir em
   amarelo), mesmo com o programa no tema escuro.
+- A tela inicial ficou só com usuário, senha, mês e **Baixar e abrir** (endereço e leiaute em **Configurar
+  relógio**). Com o acesso salvo, o programa já abre no mês anterior inteiro, do dia 1 ao último dia.
 
 ### Quem fez o quê
 
