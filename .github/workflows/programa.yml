@@ -6,7 +6,7 @@ name: Programa para Windows
 
 on:
   push:
-    branches: [main, cartao-ponto]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
