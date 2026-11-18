@@ -29,7 +29,7 @@ PRIMEIRO USO
 
 O QUE O PROGRAMA MOSTRA
 -----------------------
-  - HORAS PRATICAS: minuto a minuto do relogio, sem abono.
+  - TRABALHADO: as horas que a pessoa bateu no relogio.
   - HORA FECHADA: depois da tolerancia de 5 min por batida e 10 min no dia
     (CLT art. 58, par. 1). Passou disso, vale a diferenca inteira.
   - FERIADO: sem jornada prevista. PONTO FACULTATIVO: dia normal, so marcado.

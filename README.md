@@ -35,7 +35,7 @@ a nova.
 
 ## O que o programa mostra
 
-- **HORAS PRÁTICAS** — o relógio puro, minuto a minuto, sem nenhum abono.
+- **TRABALHADO** — as horas que a pessoa bateu no relógio.
 - **HORA FECHADA** — depois da tolerância legal: se toda batida variou até 5 minutos do horário previsto e
   a soma do dia ficou em até 10 minutos, o dia fecha em 00:00; passou disso, vale a diferença inteira
   (CLT art. 58, §1º; Súmula 366 do TST).
@@ -45,7 +45,7 @@ a nova.
   aparecem, mas o dia fica fora da hora fechada até alguém conferir.
 - **Alertas** — mais de 12h no dia, intervalo menor que 1h (CLT art. 71), descanso menor que 11h entre
   jornadas (CLT art. 66). Não mudam o saldo.
-- **Relatório por colaborador** — uma página por colaborador e por mês, com as duas horas, para imprimir ou
+- **Relatório por colaborador** — uma página por colaborador e por mês, com as horas trabalhadas e a hora fechada, para imprimir ou
   salvar em PDF. Duas empresas no mesmo relógio são separadas pela lista de empresas.
 
 ---
@@ -98,7 +98,7 @@ Por ser um cálculo que afeta salário, o dono pediu uma conferência independen
 - Feriado nacional tem jornada zero; o que for trabalhado é hora extra.
 - Ponto facultativo **não é folga** na Fortman: é dia normal, só marcado.
 - Batida esquecida ou repetida deixa o dia **para conferir**, sem inventar horário.
-- Sempre duas informações: **horas práticas** (soma real) e **hora fechada** (soma que a lei manda).
+- Sempre duas informações: **horas trabalhadas** (o que foi batido) e **hora fechada** (soma que a lei manda).
 
 **6 de novembro de 2026 — o relatório e a fase 1.**
 - **Relatório por colaborador**: uma página por colaborador e por mês, com separação por **empresa** (duas
@@ -118,6 +118,14 @@ A fase 1 foi aprovada e juntada às versões oficiais. Na reinstalação, ficou 
 - o GitHub passou a **montar o programa sozinho**: a cada mudança, roda os testes, baixa o motor oficial do
   PHP Desktop (conferido pela impressão digital), junta com o contador de horas e publica o
   `CartaoPonto-Windows.zip` em **Releases**. Baixar, extrair e dar dois cliques.
+
+**18 de novembro de 2026 — tela mais simples e relatório legível.**
+- A coluna "horas práticas" saiu, porque confundia: a tela e o relatório mostram as horas que a pessoa bateu
+  (**Trabalhado**) e a **hora fechada**.
+- Com o relógio configurado, o título e os botões de carregar arquivo, colar conteúdo e listas de nomes e de
+  empresas só aparecem em **Números para nerd**.
+- O relatório passou a sair sempre nas cores aprovadas (branco e cinza, feriado em pêssego, para conferir em
+  amarelo), mesmo com o programa no tema escuro.
 
 ### Quem fez o quê
 
